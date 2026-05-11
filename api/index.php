@@ -7,12 +7,50 @@ header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: OPTIONS,GET,POST,PUT,DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
+// Bootstrap modul auth (non-breaking untuk action lama)
+require_once __DIR__ . '/config/env.php';
+require_once __DIR__ . '/helpers/response.php';
+require_once __DIR__ . '/helpers/http.php';
+require_once __DIR__ . '/helpers/cookie.php';
+require_once __DIR__ . '/middlewares/AuthMiddleware.php';
+
+// Autoload controllers (satu class per file)
+spl_autoload_register(function ($class) {
+    $file = __DIR__ . '/controllers/' . $class . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+
 // Tangkap request method & endpoint
 $request_method = $_SERVER["REQUEST_METHOD"];
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
 // Simple API Router
 switch ($action) {
+    // ===================== AUTH =====================
+    case 'login':
+        if ($request_method !== 'POST') {
+            sendResponse(405, 'Method harus POST', null);
+        }
+        (new AuthController())->login(readJsonBody());
+        break;
+
+    case 'whoami':
+        if ($request_method !== 'GET') {
+            sendResponse(405, 'Method harus GET', null);
+        }
+        (new AuthController())->whoami();
+        break;
+
+    case 'logout':
+        if ($request_method !== 'POST') {
+            sendResponse(405, 'Method harus POST', null);
+        }
+        (new AuthController())->logout();
+        break;
+
+    // ===================== KUNJUNGAN =====================
     case 'get_mapping':
         // Nanti di sini include controllernya
         // require_once 'controllers/MappingController.php';

@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# Semua request di bawah /api/* diarahkan ke index.php sebagai front-controller
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# Blok akses langsung ke .env
+<Files ".env">
+    Require all denied
+</Files>

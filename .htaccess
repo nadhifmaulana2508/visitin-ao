@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Kalau request mulai dengan /api, serahkan ke api/index.php
+RewriteCond %{REQUEST_URI} ^/api(/.*)?$
+RewriteRule ^api/?(.*)$ api/index.php [QSA,L]
+
+# Kalau file/folder fisik, serve apa adanya
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Selain itu, lempar ke index.php root (FE router)
+RewriteRule ^ index.php [L]

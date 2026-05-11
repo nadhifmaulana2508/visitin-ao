@@ -16,6 +16,15 @@ define('BASE_APP',
 );
 
 // =========================
+// SSO COOKIE -> SESSION BRIDGE
+// =========================
+// Kalau cookie sso_token ada tapi session belum terisi, anggap user sudah login.
+// Ini memungkinkan auto-login lintas aplikasi internal (monbis, report-dpk, dll).
+if (!empty($_COOKIE['sso_token']) && empty($_SESSION['user_data'])) {
+    $_SESSION['user_data'] = ['token' => $_COOKIE['sso_token']];
+}
+
+// =========================
 // AMBIL URL DARI REQUEST URI (ANTI BADAI NGINX)
 // =========================
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -48,14 +57,21 @@ if (strpos($url, 'api/') === 0) {
 // ROUTING DEFAULT
 // =========================
 if ($url === '') {
-    // SEMENTARA BYPASS KE HOME DULU
-    $url = 'home'; 
-    // Nanti kalau fitur login sudah jadi, gunakan:
-    // $url = !empty($_SESSION['user_data']) ? 'home' : 'login';
+    // Kalau sudah login (ada SSO token), langsung ke home; jika belum, ke login.
+    $url = !empty($_SESSION['user_data']) ? 'home' : 'login';
 }
 
 // Pisahkan antara halaman (page) dan parameter (param)
 [$page, $param] = array_pad(explode('/', $url, 2), 2, null);
+
+// =========================
+// GUARD: halaman yang butuh login
+// =========================
+$publicPages = ['login', 'reset'];
+if (!in_array($page, $publicPages, true) && empty($_SESSION['user_data'])) {
+    header('Location: ' . BASE_APP . '/login');
+    exit;
+}
 
 // =========================
 // KEAMANAN (SECURITY FIX)

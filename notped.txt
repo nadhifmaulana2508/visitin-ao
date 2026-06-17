@@ -1,0 +1,14 @@
+url local : http://localhost/rest_api_sso/
+
+url server :
+https://apisso.bkkjateng.co.id
+
+
+update terakhir login pake sso belum bisa kalau di setting gini gimana
+
+kalau masih dev, pake url local, kalau untuk di production otomatis pake url tidak lokal
+
+
+mungkin untuk tampilan sekarang bisa di sesuaikan responsif di semua device aja yaa, karna ketika kita penjelasan ke cabang buka pake laptop jadi dibuat responsif aja
+
+buatkan issue.md sedetail mungkin agar ai yang lebih low atau progammer pemula mudah untuk mengimplementasikannya

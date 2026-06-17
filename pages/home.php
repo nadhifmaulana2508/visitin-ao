@@ -83,7 +83,7 @@ $cabang = 'Cabang Utama';
     
     <div class="row g-3">
         <?php if ($role == 'remedial'): ?>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/mapping" class="menu-card">
                     <div class="menu-icon-wrapper icon-orange">
                         <i class="fa-solid fa-calendar-check"></i>
@@ -91,7 +91,7 @@ $cabang = 'Cabang Utama';
                     <span class="menu-title">Mapping<br>Bulan Ini</span>
                 </a>
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/nominatif" class="menu-card">
                     <div class="menu-icon-wrapper icon-blue">
                         <i class="fa-solid fa-file-invoice-dollar"></i>
@@ -99,7 +99,7 @@ $cabang = 'Cabang Utama';
                     <span class="menu-title">Nominatif<br>Kredit</span>
                 </a>
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/janji-bayar" class="menu-card">
                     <div class="menu-icon-wrapper icon-green">
                         <i class="fa-solid fa-handshake"></i>
@@ -107,7 +107,7 @@ $cabang = 'Cabang Utama';
                     <span class="menu-title">Janji Bayar<br>(Kunjungan)</span>
                 </a>
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/hapus-buku" class="menu-card">
                     <div class="menu-icon-wrapper icon-red">
                         <i class="fa-solid fa-file-circle-xmark"></i>
@@ -117,7 +117,7 @@ $cabang = 'Cabang Utama';
             </div>
 
         <?php elseif ($role == 'kredit'): ?>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/prospek" class="menu-card">
                     <div class="menu-icon-wrapper icon-green">
                         <i class="fa-solid fa-user-check"></i>
@@ -125,7 +125,7 @@ $cabang = 'Cabang Utama';
                     <span class="menu-title">Prospek<br>(Dikunjungi)</span>
                 </a>
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/mapping" class="menu-card">
                     <div class="menu-icon-wrapper icon-orange">
                         <i class="fa-solid fa-users-gear"></i>
@@ -133,7 +133,7 @@ $cabang = 'Cabang Utama';
                     <span class="menu-title">Mapping<br>Existing</span>
                 </a>
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/potensi" class="menu-card">
                     <div class="menu-icon-wrapper icon-blue">
                         <i class="fa-solid fa-money-bill-trend-up"></i>
@@ -143,7 +143,7 @@ $cabang = 'Cabang Utama';
             </div>
 
         <?php elseif ($role == 'dana'): ?>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/kelola-dana" class="menu-card">
                     <div class="menu-icon-wrapper icon-blue">
                         <i class="fa-solid fa-vault"></i>
@@ -151,7 +151,7 @@ $cabang = 'Cabang Utama';
                     <span class="menu-title">Kelola<br>Dana</span>
                 </a>
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4 col-xl-3">
                 <a href="<?= BASE_APP ?>/mapping" class="menu-card">
                     <div class="menu-icon-wrapper icon-orange">
                         <i class="fa-solid fa-calendar-day"></i>

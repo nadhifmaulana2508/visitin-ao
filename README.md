@@ -1,831 +1,417 @@
-# Visitin AO / Kunjungan AO
+# Visitin AO
 
-Prototype aplikasi kunjungan Account Officer berbasis PHP native. Repo ini saat ini berisi UI mobile-first untuk mapping nasabah, input kunjungan, history, profile, dan modul auth awal yang melakukan proxy login ke SIMPEG SSO.
+**Sistem Kunjungan & Pengelolaan Nasabah untuk Account Officer (AO)**
 
-Dokumen ini dibuat sebagai pegangan build ulang: apa yang sudah ada, apa yang belum selesai, urutan progres yang disarankan, dan standar implementasi agar programmer pemula atau AI assistant berikutnya bisa langsung melanjutkan tanpa menebak-nebak.
+Aplikasi berbasis web mobile-first yang digunakan oleh Account Officer (AO) bank untuk mengelola kunjungan nasabah, mapping debitur, pencatatan aktivitas penagihan, dan monitoring pipeline kredit.
 
-## Ringkasan Kondisi Saat Ini
+> **Live URL**: `visitin-ao.bkkjateng.co.id`  
+> **SSO Domain**: `apisso.bkkjateng.co.id`
 
-Status project: prototype UI + auth bridge awal, belum menjadi aplikasi backend penuh.
+---
 
-Yang sudah ada:
+## Daftar Isi
 
-- Routing halaman utama melalui `index.php`.
-- Template global di `views/header.php`, `views/navbar.php`, dan `views/script.php`.
-- UI mobile untuk `home`, `mapping`, `nominatif`, `history`, `profile`, `janji-bayar`, `hapus-buku`, detail kunjungan, dan history per debitur.
-- Auth API awal: `login`, `whoami`, dan `logout` di `api/index.php` lewat `AuthController`.
-- Helper API awal: env loader, response JSON, HTTP cURL wrapper, cookie SSO, dan auth middleware.
-- Draft form kunjungan lengkap di `pages/kunjungan-create-kal.php` dengan GPS, kamera, upload foto, VA, WhatsApp, smart form PTP/RKS, dan potensi top-up.
-- Dokumen issue auth di `docs/issues/001-auth-login.md`.
+- [Arsitektur](#arsitektur)
+- [Tech Stack](#tech-stack)
+- [Struktur Direktori](#struktur-direktori)
+- [Fitur yang Sudah Dibangun](#fitur-yang-sudah-dibangun)
+- [Fitur dalam Pengembangan](#fitur-dalam-pengembangan)
+- [Instalasi & Setup](#instalasi--setup)
+- [Konfigurasi Environment](#konfigurasi-environment)
+- [API Endpoints](#api-endpoints)
+- [Routing](#routing)
+- [Autentikasi (SSO)](#autentikasi-sso)
+- [Role Pengguna](#role-pengguna)
+- [Halaman Aplikasi](#halaman-aplikasi)
+- [Konvensi Pengembangan](#konvensi-pengembangan)
+- [Roadmap](#roadmap)
 
-Yang belum selesai:
+---
 
-- `pages/kunjungan-create.php` masih kosong, padahal banyak tombol mengarah ke halaman ini.
-- Endpoint bisnis masih dummy atau belum ada: dashboard, mapping, nominatif, create kunjungan, history, detail, janji bayar, hapus buku.
-- Belum ada folder `api/models/`.
-- Belum ada adapter/query API untuk membaca database existing.
-- `api/.env.example` masih kosong.
-- Konfigurasi database masih hardcoded di `api/config/database.php`.
-- Folder `uploads/kunjungan/` belum ada.
-- Hampir semua halaman frontend masih memakai data hardcoded.
-- Logout di profile masih link ke `/login`, belum memanggil API logout.
-- Halaman reset password/aktivasi masih form statis.
-- Belum ada validasi backend untuk input kunjungan, upload foto, ukuran file, MIME type, dan relasi data.
-- Belum ada proteksi authorization per role/cabang/AO untuk data nasabah.
-- Belum ada test atau smoke test terdokumentasi.
+## Arsitektur
 
-## Stack
+Aplikasi menggunakan arsitektur **MVC sederhana (PHP Native)** dengan pemisahan antara frontend (pages) dan backend (REST API):
 
-- PHP native.
-- Apache/XAMPP.
-- MySQL/MariaDB via PDO.
-- Bootstrap 5.3 dari CDN.
-- Font Awesome dari CDN.
-- jQuery dan Select2 pada halaman tertentu.
-- Leaflet pada draft form kunjungan.
-- SIMPEG SSO sebagai sumber autentikasi.
-
-Belum ada Composer, framework PHP, bundler frontend, atau dependency manager di repo ini.
-
-## Struktur Repo
-
-```text
-.
-|-- index.php                    # Router halaman utama
-|-- .htaccess                    # Rewrite semua request halaman ke index.php
-|-- README.md                    # Dokumen kerja project
-|-- issue.md                     # Catatan kebutuhan lama
-|-- notped.txt                   # Catatan konfigurasi SSO lokal/produksi
-|-- api/
-|   |-- index.php                # Front controller API berbasis ?action=
-|   |-- .env                     # Config lokal, jangan commit kredensial
-|   |-- .env.example             # Masih kosong, perlu dilengkapi
-|   |-- config/
-|   |   |-- database.php         # Koneksi PDO, masih hardcoded
-|   |   `-- env.php              # Loader .env ringan
-|   |-- controllers/
-|   |   `-- AuthController.php   # Login/whoami/logout via SIMPEG
-|   |-- helpers/
-|   |   |-- cookie.php
-|   |   |-- http.php
-|   |   `-- response.php
-|   `-- middlewares/
-|       `-- AuthMiddleware.php
-|-- pages/
-|   |-- login.php
-|   |-- home.php
-|   |-- mapping.php
-|   |-- nominatif.php
-|   |-- history.php
-|   |-- profile.php
-|   |-- janji-bayar.php
-|   |-- hapus-buku.php
-|   |-- kunjungan-create.php       # Kosong
-|   |-- kunjungan-create-kal.php   # Draft form kunjungan lengkap
-|   |-- kunjungan-detail.php
-|   `-- kunjungan-history-debitur.php
-`-- views/
-    |-- header.php
-    |-- navbar.php
-    `-- script.php
+```
+┌──────────────────────────────────────────────────┐
+│                    Browser                         │
+│              (Mobile-first PWA-like)              │
+└───────────────────────┬──────────────────────────┘
+                        │
+            ┌───────────┴───────────┐
+            │                       │
+     ┌──────▼──────┐       ┌───────▼───────┐
+     │  index.php  │       │  api/index.php │
+     │  (Router    │       │  (API Router)  │
+     │   Halaman)  │       │               │
+     └──────┬──────┘       └───────┬───────┘
+            │                       │
+   ┌────────┴────────┐    ┌────────┴────────┐
+   │  pages/*.php    │    │  controllers/   │
+   │  views/*.php    │    │  middlewares/   │
+   │                 │    │  helpers/       │
+   └─────────────────┘    │  config/        │
+                          └────────┬────────┘
+                                   │
+                          ┌────────▼────────┐
+                          │   MySQL (PDO)   │
+                          │  + API SIMPEG   │
+                          └─────────────────┘
 ```
 
-## Cara Menjalankan Lokal
+**Prinsip Utama:**
+- **Front Controller Pattern** — Semua request masuk ke `index.php` (halaman) atau `api/index.php` (API).
+- **Clean URL** — Menggunakan `.htaccess` RewriteRule untuk URL tanpa ekstensi `.php`.
+- **SSO Cookie Bridge** — Token dari SIMPEG disimpan sebagai cookie `sso_token` dan di-bridge ke PHP session.
+- **Mobile-First UI** — Layout max-width 480px dengan bottom navigation ala native app.
 
-1. Letakkan repo di:
+---
 
-```text
-C:\xampp\htdocs\kunjungan-ao
+## Tech Stack
+
+| Layer | Teknologi |
+|-------|-----------|
+| **Backend** | PHP 8.x (Native, tanpa framework) |
+| **Database** | MySQL via PDO |
+| **Frontend** | HTML5, CSS3 (Custom + Bootstrap 5.3.2) |
+| **JavaScript** | Vanilla JS + jQuery (select2) |
+| **Icons** | FontAwesome 6.4.2 |
+| **Maps** | Leaflet.js 1.9.4 + OpenStreetMap Nominatim |
+| **Auth** | JWT via SSO SIMPEG (cookie-based) |
+| **Server** | Apache (mod_rewrite) / Nginx |
+
+---
+
+## Struktur Direktori
+
+```
+visitin-ao/
+├── index.php                  # Front controller utama (router halaman)
+├── .htaccess                  # Rewrite rules untuk clean URL
+├── .gitignore
+├── README.md                  # Dokumentasi ini
+├── issue.md                   # Issue & roadmap pengembangan fitur baru
+│
+├── api/                       # Backend REST API
+│   ├── index.php              # API router (switch-case ?action=xxx)
+│   ├── .env.example           # Template konfigurasi environment
+│   ├── config/
+│   │   ├── database.php       # Koneksi database (PDO)
+│   │   └── env.php            # Loader .env tanpa Composer
+│   ├── controllers/
+│   │   └── AuthController.php # Login, Whoami, Logout (proxy SIMPEG)
+│   ├── middlewares/
+│   │   └── AuthMiddleware.php # Ekstrak token dari header/cookie
+│   └── helpers/
+│       ├── response.php       # sendResponse(), readJsonBody()
+│       ├── http.php           # httpRequest() cURL wrapper
+│       └── cookie.php         # setAuthCookie(), clearAuthCookie()
+│
+├── pages/                     # Halaman-halaman frontend
+│   ├── login.php              # Halaman login (SSO fetch)
+│   ├── reset.php              # Aktivasi / Reset password
+│   ├── home.php               # Dashboard utama (role-based menu)
+│   ├── mapping.php            # Mapping debitur awal bulan
+│   ├── nominatif.php          # Data nominatif kredit
+│   ├── history.php            # Riwayat aktivitas kunjungan
+│   ├── profile.php            # Profil & pengaturan akun
+│   ├── janji-bayar.php        # Daftar janji bayar (PTP)
+│   ├── hapus-buku.php         # Data debitur hapus buku (PH)
+│   ├── kunjungan-create.php   # Form input kunjungan (kosong/WIP)
+│   ├── kunjungan-create-kal.php # Form kunjungan + kalkulator simulasi
+│   ├── kunjungan-detail.php   # Detail bukti kunjungan
+│   ├── kunjungan-history-debitur.php # Timeline riwayat per debitur
+│   └── kalkulator-simulasi.php # Widget simulasi penurunan DPD
+│
+├── views/                     # Komponen UI reusable
+│   ├── header.php             # DOCTYPE, CSS global, mobile wrapper
+│   ├── navbar.php             # Bottom navigation bar
+│   └── script.php             # Penutup wrapper + Bootstrap JS
+│
+└── docs/                      # Dokumentasi teknis
+    └── issues/
+        └── 001-auth-login.md  # Dokumentasi implementasi auth
 ```
 
-2. Jalankan Apache dan MySQL dari XAMPP.
+---
 
-3. Buka aplikasi:
+## Fitur yang Sudah Dibangun
 
-```text
-http://localhost/kunjungan-ao
+### 1. Autentikasi SSO (Selesai)
+- Login via proxy ke API SIMPEG (`/auth/login`)
+- Validasi token via `/auth/whoami`
+- Cookie SSO (`sso_token`) untuk single sign-on lintas aplikasi internal
+- Session bridge (cookie -> PHP session)
+- Logout (clear cookie)
+
+### 2. Frontend Pages (UI Selesai, Belum Terintegrasi API)
+- **Home** — Dashboard role-based (remedial, kredit, dana)
+- **Mapping** — Daftar debitur mapping awal bulan + ringkasan performa
+- **Nominatif** — Data nominatif kredit dengan filter multi-level
+- **History** — Riwayat kunjungan + raport kinerja AO
+- **Profile** — ID Card pegawai, ganti password, sinkronisasi SIMPEG
+- **Janji Bayar** — Follow-up nasabah PTP (belum/sudah bayar)
+- **Hapus Buku** — Data debitur PH (Penghapusan Buku)
+- **Kunjungan Create** — Form input kunjungan (GPS, kamera, smart form)
+- **Kunjungan Detail** — Bukti kunjungan dengan watermark foto
+- **Kalkulator Simulasi** — Simulasi penurunan DPD (Days Past Due)
+- **Login & Reset** — Form login + form aktivasi/reset password
+
+### 3. API Endpoints (Partial)
+- `POST /api/?action=login` — Autentikasi via SIMPEG
+- `GET /api/?action=whoami` — Validasi token + ambil profil
+- `POST /api/?action=logout` — Hapus cookie
+- `GET /api/?action=get_mapping` — Dummy response (placeholder)
+- `POST /api/?action=create_kunjungan` — Dummy response (placeholder)
+
+---
+
+## Fitur dalam Pengembangan
+
+Lihat file [`issue.md`](./issue.md) untuk detail lengkap:
+
+1. **Modul Prospek** — Input, delegasi, dan follow-up prospek bisnis (kredit, tabungan, deposito, pembeli aset, debitur existing)
+2. **Delegasi AO** — Superuser mendelegasikan prospek ke AO yang tepat berdasarkan jenis prospek
+3. **SLA Kredit** — Pencatatan pipeline kredit dengan tracking waktu proses
+4. **Mapping Debitur** — Pembagian debitur ke AO berdasarkan hari menunggak setiap awal bulan
+5. **Monitoring & Laporan** — Dashboard superuser untuk monitoring progres
+
+---
+
+## Instalasi & Setup
+
+### Prasyarat
+- PHP 8.0+ dengan ekstensi: `pdo_mysql`, `curl`, `json`, `mbstring`
+- MySQL 5.7+ / MariaDB 10.3+
+- Apache (mod_rewrite) atau Nginx
+- Akses ke API SIMPEG (untuk autentikasi)
+
+### Langkah Instalasi
+
+```bash
+# 1. Clone repository
+git clone https://github.com/nadhifmaulana2508/visitin-ao.git
+
+# 2. Masuk ke direktori project
+cd visitin-ao
+
+# 3. Salin konfigurasi environment
+cp api/.env.example api/.env
+
+# 4. Edit file .env sesuai konfigurasi lokal
+nano api/.env
+
+# 5. Buat database MySQL
+mysql -u root -p -e "CREATE DATABASE db_kunjungan;"
+
+# 6. (Opsional) Jalankan dengan PHP built-in server untuk development
+php -S localhost:8080
+
+# 7. Atau letakkan di folder htdocs/www Apache
+# Pastikan folder project bernama 'kunjungan-ao' di localhost
+# Akses: http://localhost/kunjungan-ao
 ```
 
-4. Buka API:
+### Setup Apache Virtual Host (Production)
 
-```text
-http://localhost/kunjungan-ao/api/?action=whoami
+```apache
+<VirtualHost *:80>
+    ServerName visitin-ao.bkkjateng.co.id
+    DocumentRoot /var/www/visitin-ao
+    
+    <Directory /var/www/visitin-ao>
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
 ```
 
-5. Siapkan database lokal, misalnya:
+---
 
-```sql
-CREATE DATABASE db_kunjungan CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
+## Konfigurasi Environment
 
-6. Lengkapi `api/.env.example`, lalu buat `api/.env` dari contoh tersebut.
-
-Contoh isi yang disarankan:
+File: `api/.env` (dibuat dari `api/.env.example`)
 
 ```env
+# API SSO SIMPEG
+SIMPEG_BASE_URL=https://apisso.bkkjateng.co.id
 APP_NAME=visitin-ao
-APP_ENV=local
 
-DB_HOST=localhost
-DB_NAME=db_kunjungan
-DB_USER=root
-DB_PASS=
-DB_CHARSET=utf8mb4
-
-SIMPEG_BASE_URL=http://localhost/rest_api_sso
-
+# Cookie SSO (lintas aplikasi internal)
 COOKIE_NAME=sso_token
-COOKIE_DOMAIN=
-COOKIE_PATH=/
-COOKIE_SECURE=false
+COOKIE_DOMAIN=.bkkjateng.co.id    # Kosongkan untuk localhost
+COOKIE_SECURE=true                  # false untuk localhost
 COOKIE_SAMESITE=Lax
+COOKIE_PATH=/
 ```
 
-Untuk production, `SIMPEG_BASE_URL` diarahkan ke:
+**Catatan untuk development lokal:**
+- Set `COOKIE_DOMAIN=` (kosong)
+- Set `COOKIE_SECURE=false`
 
-```text
-https://apisso.bkkjateng.co.id
+---
+
+## API Endpoints
+
+Base URL: `/api/?action={action_name}`
+
+| Method | Action | Auth | Deskripsi |
+|--------|--------|------|-----------|
+| POST | `login` | Public | Login via SIMPEG SSO |
+| GET | `whoami` | Bearer/Cookie | Ambil profil user |
+| POST | `logout` | - | Clear cookie SSO |
+| GET | `get_mapping` | Bearer/Cookie | Daftar mapping debitur |
+| POST | `create_kunjungan` | Bearer/Cookie | Simpan data kunjungan |
+
+### Format Response Standar
+
+```json
+{
+  "status": 200,
+  "message": "Pesan deskriptif",
+  "data": { ... }
+}
 ```
 
-Catatan: `api/config/database.php` belum membaca `.env`, jadi step ini perlu diimplementasikan pada fase backend.
+---
 
 ## Routing
 
-### Routing Halaman
+### Halaman (Frontend)
+Router di `index.php` menggunakan clean URL:
 
-Routing utama ada di `index.php`.
+```
+https://visitin-ao.bkkjateng.co.id/{page}
+https://visitin-ao.bkkjateng.co.id/{page}/{param}
+```
 
 Contoh:
+- `/home` → `pages/home.php`
+- `/mapping` → `pages/mapping.php`
+- `/kunjungan-detail/123` → `pages/kunjungan-detail.php` (param=123)
 
-```text
-/login                     -> pages/login.php
-/home                      -> pages/home.php
-/mapping                   -> pages/mapping.php
-/kunjungan-detail/123      -> pages/kunjungan-detail.php dengan $_GET['id']=123
+### API (Backend)
+Router di `api/index.php` menggunakan query parameter:
+
+```
+/api/?action=login         → AuthController::login()
+/api/?action=whoami        → AuthController::whoami()
+/api/?action=get_mapping   → (placeholder)
 ```
 
-Halaman selain `login` dan `reset` wajib punya `$_SESSION['user_data']`. Saat cookie `sso_token` tersedia, `index.php` membuat session bridge sederhana:
+### Halaman Publik (Tanpa Login)
+- `/login`
+- `/reset`
 
+Semua halaman lain memerlukan cookie `sso_token` valid.
+
+---
+
+## Autentikasi (SSO)
+
+Aplikasi menggunakan **Single Sign-On** via API SIMPEG:
+
+1. User submit `id_peg` + `password` di form login
+2. Frontend fetch ke `/api/?action=login`
+3. Backend proxy ke SIMPEG `/auth/login`
+4. Jika valid, SIMPEG return JWT token
+5. Backend set cookie `sso_token` (HttpOnly, domain `.bkkjateng.co.id`)
+6. Cookie dipakai bersama oleh aplikasi internal lain (monbis, report-dpk, dll)
+
+**Prioritas sumber token:**
+1. Header `Authorization: Bearer <token>` (utama)
+2. Cookie `sso_token` (fallback)
+
+---
+
+## Role Pengguna
+
+Aplikasi mendukung multiple role dengan menu berbeda:
+
+| Role | Fungsi | Menu Utama |
+|------|--------|------------|
+| **AO Remedial** | Penagihan debitur bermasalah | Mapping, Nominatif, Janji Bayar, Hapus Buku |
+| **AO Kredit** | Prospek & pengelolaan kredit aktif | Prospek, Mapping Existing, Potensi Top-Up |
+| **AO Dana** | Pengelolaan tabungan & deposito | Kelola Dana, Jadwal Menabung |
+| **Superuser** | Delegasi prospek & mapping debitur | Semua menu + Delegasi + Mapping |
+| **Developer** | Akses penuh untuk testing | Seluruh fitur |
+
+---
+
+## Halaman Aplikasi
+
+| Halaman | File | Deskripsi |
+|---------|------|-----------|
+| Login | `pages/login.php` | Form login SSO dengan validasi async |
+| Reset | `pages/reset.php` | Aktivasi akun / reset password |
+| Home | `pages/home.php` | Dashboard dengan menu role-based |
+| Mapping | `pages/mapping.php` | Daftar debitur + coverage + ringkasan |
+| Nominatif | `pages/nominatif.php` | Data kredit seluruh cabang |
+| History | `pages/history.php` | Riwayat kunjungan + raport kinerja |
+| Profile | `pages/profile.php` | Info pegawai + pengaturan |
+| Janji Bayar | `pages/janji-bayar.php` | Follow-up PTP |
+| Hapus Buku | `pages/hapus-buku.php` | Data debitur PH |
+| Kunjungan Create | `pages/kunjungan-create-kal.php` | Form kunjungan lengkap |
+| Kunjungan Detail | `pages/kunjungan-detail.php` | Detail bukti kunjungan |
+| History Debitur | `pages/kunjungan-history-debitur.php` | Timeline per nasabah |
+
+---
+
+## Konvensi Pengembangan
+
+### Penamaan File
+- Halaman: `pages/{nama-fitur}.php` (kebab-case)
+- Controller: `api/controllers/{NamaController}.php` (PascalCase)
+- Helper: `api/helpers/{nama}.php` (lowercase)
+
+### CSS
+- Menggunakan CSS Variables global di `views/header.php`
+- Setiap halaman memiliki `<style>` scoped di awal file
+- Warna utama: `--color-primary` (#0A1931), `--color-accent` (#FF7B54)
+
+### JavaScript
+- Vanilla JS untuk interaksi halaman
+- jQuery hanya untuk Select2 (dependent dropdown)
+- Fetch API untuk komunikasi dengan backend
+
+### Base URL Dinamis
 ```php
-$_SESSION['user_data'] = ['token' => $_COOKIE['sso_token']];
+define('BASE_APP',
+    (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' .
+    $_SERVER['HTTP_HOST'] .
+    (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ? '/kunjungan-ao' : '')
+);
 ```
 
-### Routing API
+---
 
-API memakai pola:
+## Roadmap
 
-```text
-/api/?action=nama_action
-```
+- [x] Arsitektur dasar (routing, front controller, API router)
+- [x] Autentikasi SSO via SIMPEG
+- [x] UI halaman utama (Home, Mapping, History, Profile)
+- [x] UI form kunjungan (GPS, kamera, smart form)
+- [x] UI nominatif, janji bayar, hapus buku
+- [ ] Integrasi API `get_mapping` dengan database
+- [ ] Integrasi API `create_kunjungan` (upload foto base64)
+- [ ] Modul Prospek (kredit, tabungan, deposito, pembeli aset, debitur existing)
+- [ ] Delegasi AO oleh Superuser
+- [ ] SLA Kredit (pipeline + tracking waktu)
+- [ ] Mapping Debitur awal bulan (validasi kategori)
+- [ ] Pipeline debitur per AO
+- [ ] Monitoring & Laporan
+- [ ] Push notification / reminder janji bayar
+- [ ] Responsif cross-device
 
-Action yang sudah ada:
+---
 
-| Method | Action | Status |
-|---|---|---|
-| POST | `login` | Sudah ada, proxy ke SIMPEG |
-| GET | `whoami` | Sudah ada, proxy ke SIMPEG |
-| POST | `logout` | Sudah ada, clear cookie |
-| GET | `get_mapping` | Masih dummy |
-| POST | `create_kunjungan` | Masih dummy, belum simpan DB/foto |
+## Lisensi
 
-## Standar Response API
+Internal - BKK Jateng. Tidak untuk distribusi publik.
 
-Saat ini helper `sendResponse()` mengirim format:
+---
 
-```json
-{
-  "status": 200,
-  "message": "Login berhasil",
-  "data": {}
-}
-```
+## Kontak
 
-Gunakan format ini secara konsisten untuk semua endpoint baru. Hindari endpoint yang kadang memakai `status: "success"` dan kadang `status: 200`, karena frontend akan sulit dibuat stabil.
-
-Rekomendasi final:
-
-```json
-{
-  "status": 200,
-  "message": "Data berhasil disimpan",
-  "data": {}
-}
-```
-
-## Modul Yang Sudah Dipelajari
-
-### Auth
-
-File penting:
-
-- `api/controllers/AuthController.php`
-- `api/middlewares/AuthMiddleware.php`
-- `api/helpers/cookie.php`
-- `api/helpers/http.php`
-- `api/config/env.php`
-- `pages/login.php`
-
-Alur login:
-
-1. User submit `id_peg` dan `password` dari `pages/login.php`.
-2. Frontend memanggil `POST /api/?action=login`.
-3. Backend meneruskan data ke `SIMPEG_BASE_URL/auth/login`.
-4. Jika SIMPEG mengembalikan token, backend menyimpan token ke cookie `sso_token`.
-5. User diarahkan ke `/home`.
-
-Catatan yang harus diperbaiki:
-
-- `api/.env.example` kosong.
-- Perlu fallback otomatis local/production untuk `SIMPEG_BASE_URL`.
-- Perlu pengujian login terhadap SSO lokal dan production.
-- Frontend halaman lain belum memanggil `whoami`, sehingga nama, role, cabang masih dummy.
-- Logout di `profile.php` belum memanggil `POST /api/?action=logout`.
-
-### Home
-
-File: `pages/home.php`
-
-Status:
-
-- UI menu utama sudah ada.
-- Role, nama user, dan cabang masih hardcoded:
-
-```php
-$role = 'remedial';
-$nama_user = 'Budi Santoso';
-$cabang = 'Cabang Utama';
-```
-
-Perlu:
-
-- Ambil data dari `whoami` atau session user lengkap.
-- Tampilkan menu berdasarkan role sebenarnya.
-- Pastikan route menu yang belum ada tidak membuat user masuk 404.
-
-### Mapping
-
-File: `pages/mapping.php`
-
-Status:
-
-- UI list mapping, filter, ringkasan, badge bucket, coverage sudah ada.
-- Data masih hardcoded.
-- Filter belum bekerja.
-- Tombol "Mulai Kunjungan" mengarah ke `kunjungan-create`, tetapi file target kosong.
-
-Perlu:
-
-- Endpoint `get_mapping`.
-- Endpoint `get_dashboard` atau `get_mapping_summary`.
-- Filter query: bulan, AO, cabang, kecamatan, desa, status bayar, bucket, kolektibilitas, minimal tunggakan.
-- Pagination.
-- Integrasi tombol create dengan `no_rekening` atau `mapping_id`.
-
-### Kunjungan Create
-
-File utama saat ini kosong:
-
-- `pages/kunjungan-create.php`
-
-Draft lengkap ada di:
-
-- `pages/kunjungan-create-kal.php`
-
-Fitur yang sudah ada di draft:
-
-- Data debitur readonly.
-- Kode tindakan.
-- Jenis tindakan.
-- Lokasi tindakan.
-- Orang ditemui.
-- Nominal dan tanggal janji bayar.
-- Keterangan.
-- GPS dan reverse geocoding.
-- Kamera WebRTC.
-- Upload foto.
-- Hidden input `foto_base64`.
-- VA dan tombol WhatsApp.
-- Potensi top-up.
-
-Perlu:
-
-- Pindahkan/rapikan draft ke `kunjungan-create.php`.
-- Buat parameter URL, misalnya `/kunjungan-create/{no_rekening}`.
-- Ambil data debitur dari API, bukan hardcoded.
-- Submit via `fetch` ke `POST /api/?action=create_kunjungan`.
-- Simpan foto base64 ke `uploads/kunjungan/`.
-- Simpan path foto relatif ke database.
-- Validasi required field berdasarkan kode tindakan.
-- Jika jenis tindakan bukan kunjungan, aturan GPS/foto perlu didefinisikan.
-
-### History
-
-File:
-
-- `pages/history.php`
-- `pages/kunjungan-detail.php`
-- `pages/kunjungan-history-debitur.php`
-
-Status:
-
-- UI list, raport, detail, watermark foto, timeline debitur sudah ada.
-- Semua data masih dummy.
-
-Perlu:
-
-- Endpoint `get_history`.
-- Endpoint `get_detail_kunjungan`.
-- Endpoint `get_history_debitur`.
-- Filter tanggal dan kode tindakan.
-- Detail harus memuat foto asli, koordinat, alamat GPS, AO, waktu, dan catatan.
-- Raport AO harus dihitung dari data kunjungan nyata.
-
-### Nominatif
-
-File: `pages/nominatif.php`
-
-Status:
-
-- UI list dan filter sudah ada.
-- Data masih hardcoded.
-
-Perlu:
-
-- Endpoint `get_nominatif`.
-- Filter cabang, kantor kas, kolektibilitas, kecamatan, desa, bucket, minimal tunggakan.
-- Role pusat dapat melihat semua cabang.
-- Role cabang hanya melihat cabangnya.
-- Role AO hanya melihat data yang ditugaskan ke AO tersebut.
-
-### Janji Bayar
-
-File: `pages/janji-bayar.php`
-
-Status:
-
-- UI tab belum bayar/sudah bayar ada.
-- Data masih hardcoded.
-
-Perlu:
-
-- Endpoint `get_janji_bayar`.
-- Status janji: belum jatuh tempo, jatuh tempo hari ini, lewat jatuh tempo, sudah bayar, batal.
-- Relasi ke kunjungan PTP/PET/PPK/LNS.
-
-### Hapus Buku
-
-File: `pages/hapus-buku.php`
-
-Status:
-
-- UI list, filter, Select2, dan dependent dropdown dummy wilayah sudah ada.
-- Data masih hardcoded.
-
-Perlu:
-
-- Endpoint `get_hapus_buku`.
-- Data saldo PH/HB dari database atau sumber eksternal.
-- Filter wilayah dari API, bukan array JS hardcoded.
-- Role dan cabang wajib dibatasi.
-
-### Profile
-
-File: `pages/profile.php`
-
-Status:
-
-- UI informasi akun, upload preview foto, sync SIMPEG, ganti password, logout ada.
-- Data masih hardcoded.
-- Upload hanya preview, belum simpan.
-- Sync dan ganti password belum jalan.
-- Logout hanya link ke login.
-
-Perlu:
-
-- Ambil data dari `whoami`.
-- Tombol logout memanggil API logout.
-- Endpoint upload foto profil jika memang dibutuhkan.
-- Endpoint sync SIMPEG jika data user akan disimpan lokal.
-- Ganti password sebaiknya diarahkan ke SIMPEG, bukan dibuat lokal, kecuali ada requirement berbeda.
-
-### Reset Password
-
-File: `pages/reset.php`
-
-Status:
-
-- UI form ada.
-- Belum terhubung ke API.
-
-Perlu:
-
-- Pastikan flow reset/aktivasi berasal dari SIMPEG.
-- Buat endpoint proxy hanya jika SIMPEG menyediakan endpoint resmi.
-- Jangan menyimpan password lokal tanpa requirement dan hashing yang benar.
-
-## Kontrak Data Dari Database Existing
-
-Project ini tidak perlu membuat tabel baru dari aplikasi. Database utama sudah tersedia di sisi sistem existing. Tugas backend nanti adalah membuat API adapter yang membaca data dari database tersebut, lalu mengubah hasil query menjadi response yang mudah dipakai frontend.
-
-Field minimal yang perlu disiapkan oleh API:
-
-### User / AO
-
-- `id_peg`
-- `nama_lengkap`
-- `role`
-- `kode_cabang`
-- `nama_cabang`
-- `kode_kantor`
-- `nama_kantor`
-- `no_hp`
-
-### Nasabah / Nominatif
-
-- `no_rekening`
-- `nama_debitur`
-- `no_hp`
-- `alamat`
-- `kecamatan`
-- `desa`
-- `latitude`
-- `longitude`
-- `baki_debet`
-- `tunggakan_pokok`
-- `tunggakan_bunga`
-- `total_tunggakan`
-- `kolektibilitas`
-- `hari_menunggak`
-- `tgl_jatuh_tempo`
-- `kode_cabang`
-- `kode_kantor`
-- `nik_ao`
-
-### Mapping / Pipeline
-
-- `no_rekening`
-- `nama_debitur`
-- `status_bayar`
-- `bucket_awal`
-- `bucket_target`
-- `bucket_actual`
-- `bucket_status` seperti `memburuk`, `stay`, atau `perbaikan`
-- `last_visit_at`
-- `last_visit_code`
-- `coverage_status`
-
-### Kunjungan
-
-- `id`
-- `no_rekening`
-- `nik_ao`
-- `tgl_kunjungan`
-- `kode_tindakan`
-- `jenis_tindakan`
-- `lokasi_tindakan`
-- `orang_ditemui`
-- `nominal_janji`
-- `tgl_janji`
-- `keterangan`
-- `latitude`
-- `longitude`
-- `alamat_gps`
-- `foto_url`
-
-Catatan penting:
-
-- Jangan membuat endpoint migration atau auto-create table untuk production.
-- Kalau butuh data dummy untuk demo UI, gunakan response dummy sementara di controller, bukan membuat struktur database baru.
-- Setelah akses database existing tersedia, mapping field asli ke kontrak response di atas.
-
-## Endpoint Yang Perlu Dibangun
-
-### Auth
-
-Sudah ada, tetapi perlu dirapikan:
-
-```text
-POST /api/?action=login
-GET  /api/?action=whoami
-POST /api/?action=logout
-```
-
-### Dashboard
-
-```text
-GET /api/?action=get_dashboard&bulan=2026-06
-```
-
-Output minimal:
-
-- total NOA mapping.
-- total baki debet.
-- coverage kunjungan.
-- frekuensi kunjungan.
-- contacted vs not contacted.
-- status bayar.
-- bucket memburuk/stay/perbaikan.
-- nominal collect.
-
-### Mapping
-
-```text
-GET /api/?action=get_mapping&bulan=2026-06&page=1&limit=10
-```
-
-Query opsional:
-
-- `q`
-- `kecamatan`
-- `desa`
-- `status_bayar`
-- `bucket`
-- `kolektibilitas`
-- `min_tunggakan`
-
-### Nominatif
-
-```text
-GET /api/?action=get_nominatif&page=1&limit=10
-```
-
-### Detail Nasabah
-
-```text
-GET /api/?action=get_nasabah&no_rekening=1029384756
-```
-
-Dipakai oleh form create kunjungan.
-
-### Create Kunjungan
-
-```text
-POST /api/?action=create_kunjungan
-```
-
-Body:
-
-```json
-{
-  "no_rekening": "1029384756",
-  "kode_tindakan": "PTP",
-  "jenis_tindakan": "Kunjungan",
-  "lokasi_tindakan": "Rumah",
-  "orang_ditemui": "Debitur",
-  "nominal_janji": 2500000,
-  "tgl_janji": "2026-06-15",
-  "keterangan": "Debitur berjanji bayar.",
-  "latitude": -6.9932,
-  "longitude": 110.4215,
-  "alamat_gps": "Alamat dari GPS",
-  "foto_base64": "data:image/jpeg;base64,..."
-}
-```
-
-Validasi minimal:
-
-- `no_rekening` wajib ada dan terdaftar.
-- `kode_tindakan` wajib valid.
-- `jenis_tindakan` wajib valid.
-- `keterangan` wajib.
-- Untuk `jenis_tindakan=Kunjungan`, GPS dan foto wajib.
-- Untuk `kode_tindakan` PTP/PET/PPK/LNS, nominal dan tanggal janji/realisasi perlu aturan jelas.
-- Foto hanya JPEG/PNG, ukuran dibatasi.
-
-### History
-
-```text
-GET /api/?action=get_history&start_date=2026-06-01&end_date=2026-06-30
-GET /api/?action=get_detail_kunjungan&id=1
-GET /api/?action=get_history_debitur&no_rekening=1029384756
-```
-
-### Janji Bayar
-
-```text
-GET /api/?action=get_janji_bayar&status=belum
-```
-
-### Hapus Buku
-
-```text
-GET /api/?action=get_hapus_buku&page=1&limit=10
-```
-
-### Wilayah
-
-```text
-GET /api/?action=get_kecamatan
-GET /api/?action=get_desa&kecamatan=Kaliori
-```
-
-## Prioritas Build Ulang
-
-### Fase 0: Rapikan fondasi
-
-- Isi `api/.env.example`.
-- Ubah `api/config/database.php` agar membaca `.env`.
-- Buat folder `api/models/`.
-- Buat folder `uploads/kunjungan/`.
-- Buat helper upload foto.
-- Samakan format response API.
-- Tambahkan handler `OPTIONS` untuk API jika dibutuhkan.
-
-Hasil akhir fase 0:
-
-- Aplikasi bisa jalan lokal.
-- API bisa konek database.
-- Config local dan production jelas.
-
-### Fase 1: Auth dan session user
-
-- Validasi login dengan SSO lokal dan production.
-- Simpan data user hasil `whoami` ke session atau cache lokal.
-- Buat helper `currentUser()`.
-- Update `home.php` dan `profile.php` agar memakai data user asli.
-- Logout profile memanggil `POST /api/?action=logout`.
-
-Hasil akhir fase 1:
-
-- User login, masuk home, melihat nama/role/cabang asli, dan bisa logout.
-
-### Fase 2: Database dan data nasabah
-
-- Buat model/adapter `Nasabah` yang membaca database existing.
-- Buat response dummy sementara hanya jika akses database existing belum tersedia.
-- Buat endpoint `get_nasabah`, `get_mapping`, dan `get_nominatif`.
-- Integrasikan `mapping.php` dan `nominatif.php` ke API.
-
-Hasil akhir fase 2:
-
-- Mapping dan nominatif tampil dari database, bukan hardcoded.
-
-### Fase 3: Create kunjungan
-
-- Jadikan `kunjungan-create-kal.php` sebagai dasar `kunjungan-create.php`.
-- Buka halaman dengan parameter `no_rekening`.
-- Ambil data debitur via API.
-- Submit kunjungan via `fetch`.
-- Decode dan simpan foto base64.
-- Simpan data kunjungan ke database.
-- Tampilkan sukses/gagal yang jelas.
-
-Hasil akhir fase 3:
-
-- AO bisa membuat kunjungan nyata lengkap dengan GPS dan foto.
-
-### Fase 4: History dan detail
-
-- Buat model `Kunjungan`.
-- Buat endpoint `get_history`, `get_detail_kunjungan`, `get_history_debitur`.
-- Integrasikan `history.php`, `kunjungan-detail.php`, dan `kunjungan-history-debitur.php`.
-- Foto detail mengambil file upload asli.
-- Link Google Maps memakai koordinat asli.
-
-Hasil akhir fase 4:
-
-- Semua kunjungan yang dibuat bisa dilihat kembali.
-
-### Fase 5: Dashboard, raport, janji bayar
-
-- Buat agregasi dashboard.
-- Buat agregasi raport AO.
-- Buat endpoint dan UI janji bayar.
-- Tentukan aturan PTP yang dianggap sudah bayar/ingkar.
-
-Hasil akhir fase 5:
-
-- Manajemen bisa membaca coverage, performa, dan follow-up janji bayar.
-
-### Fase 6: Hapus buku dan data eksternal
-
-- Tentukan sumber data HB/PH.
-- Buat table atau adapter API.
-- Integrasikan filter wilayah.
-- Terapkan batas akses role/cabang.
-
-Hasil akhir fase 6:
-
-- Data hapus buku bisa dikunjungi dan dimonitor.
-
-### Fase 7: Responsif laptop dan polishing
-
-- Saat ini UI dibatasi `max-width: 480px` di `.mobile-wrapper`.
-- Untuk presentasi cabang via laptop, perlu mode responsive:
-  - mobile tetap nyaman.
-  - tablet/laptop menampilkan layout lebih lebar.
-  - bottom nav bisa menjadi sidebar/topbar pada desktop.
-- Periksa semua halaman agar teks tidak overflow.
-- Uji di lebar 360px, 480px, 768px, 1024px, dan 1366px.
-
-Hasil akhir fase 7:
-
-- Aplikasi layak demo di HP dan laptop.
-
-## Checklist Detail Implementasi
-
-### Backend
-
-- [ ] Isi `api/.env.example`.
-- [ ] Refactor `Database` agar membaca env.
-- [ ] Tambah `api/models/DatabaseModel.php` atau base model sederhana.
-- [ ] Tambah `NasabahController`.
-- [ ] Tambah `KunjunganController`.
-- [ ] Tambah `DashboardController`.
-- [ ] Tambah `WilayahController`.
-- [ ] Tambah endpoint `get_dashboard`.
-- [ ] Tambah endpoint `get_mapping`.
-- [ ] Tambah endpoint `get_nominatif`.
-- [ ] Tambah endpoint `get_nasabah`.
-- [ ] Tambah endpoint `create_kunjungan`.
-- [ ] Tambah endpoint `get_history`.
-- [ ] Tambah endpoint `get_detail_kunjungan`.
-- [ ] Tambah endpoint `get_history_debitur`.
-- [ ] Tambah endpoint `get_janji_bayar`.
-- [ ] Tambah endpoint `get_hapus_buku`.
-- [ ] Tambah validasi request method di semua action.
-- [ ] Tambah validasi input.
-- [ ] Tambah authorization berdasarkan token/user.
-- [ ] Tambah upload helper untuk foto.
-- [ ] Tambah response error yang konsisten.
-
-### Frontend
-
-- [ ] `home.php` memakai data user asli.
-- [ ] `profile.php` memakai data user asli.
-- [ ] Logout profile memakai API.
-- [ ] `mapping.php` fetch data API.
-- [ ] Filter mapping bekerja.
-- [ ] Pagination mapping bekerja.
-- [ ] `nominatif.php` fetch data API.
-- [ ] `kunjungan-create.php` diisi dari draft form.
-- [ ] Form create kunjungan submit via API.
-- [ ] `history.php` fetch data API.
-- [ ] `kunjungan-detail.php` fetch detail API.
-- [ ] `kunjungan-history-debitur.php` fetch timeline API.
-- [ ] `janji-bayar.php` fetch data API.
-- [ ] `hapus-buku.php` fetch data API.
-- [ ] Wilayah kecamatan/desa fetch API.
-- [ ] Semua halaman diuji di mobile dan laptop.
-
-### Keamanan
-
-- [ ] Jangan commit `api/.env`.
-- [ ] Cookie production harus `Secure=true`.
-- [ ] Cookie production pakai domain yang benar.
-- [ ] Semua endpoint data wajib cek auth.
-- [ ] Query database wajib prepared statement.
-- [ ] Upload foto wajib validasi MIME dan ukuran.
-- [ ] Nama file upload wajib dibuat server-side, bukan dari user.
-- [ ] Jangan simpan password lokal kecuali ada requirement resmi.
-- [ ] Batasi akses data berdasarkan role, cabang, kantor, dan AO.
-
-## Rekomendasi Pola Kode
-
-Gunakan controller tipis dan model untuk query.
-
-Contoh alur:
-
-```text
-api/index.php
-  -> KunjunganController::create()
-    -> AuthMiddleware::require()
-    -> validate input
-    -> UploadHelper::saveBase64Image()
-    -> KunjunganModel::insert()
-    -> sendResponse()
-```
-
-Contoh struktur model:
-
-```text
-api/models/
-|-- Nasabah.php
-|-- Kunjungan.php
-|-- Dashboard.php
-`-- Wilayah.php
-```
-
-## Catatan Penting Untuk Build Berikutnya
-
-- Jangan mulai dari membuat banyak UI baru. UI sudah banyak, yang paling kurang adalah data dan backend.
-- Prioritas pertama setelah README ini adalah membuat fondasi API dan database.
-- `kunjungan-create-kal.php` jangan dibuang. Itu adalah kandidat terbaik untuk mengisi `kunjungan-create.php`.
-- Pastikan setiap tombol yang ada punya route dan data nyata.
-- Untuk demo cepat, boleh pakai response dummy di controller, tapi jangan membuat struktur database baru dari aplikasi.
-- Jika SSO local belum siap, buat mode `AUTH_FAKE=true` khusus local agar frontend tetap bisa dikembangkan. Jangan aktifkan mode ini di production.
-
-## Definition of Done MVP
-
-Project dianggap MVP ketika:
-
-- User bisa login lewat SSO.
-- User melihat home dengan data dirinya.
-- User melihat mapping dari database.
-- User membuka detail debitur.
-- User membuat kunjungan dengan kode tindakan, GPS, catatan, dan foto.
-- Data kunjungan tersimpan ke database.
-- Foto tersimpan ke `uploads/kunjungan/`.
-- User melihat history dan detail kunjungan yang baru dibuat.
-- User bisa logout.
-- Aplikasi nyaman dibuka di HP dan laptop.
+- **Repository**: [github.com/nadhifmaulana2508/visitin-ao](https://github.com/nadhifmaulana2508/visitin-ao)
+- **IT Department** - BKK Jawa Tengah

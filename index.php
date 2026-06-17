@@ -18,8 +18,9 @@ define('BASE_APP',
 // =========================
 // COOKIE -> SESSION BRIDGE (DUMMY MODE)
 // =========================
-// Decode token dari cookie dan simpan data user ke session.
-if (!empty($_COOKIE['sso_token']) && empty($_SESSION['user_data'])) {
+// SELALU decode token dari cookie setiap request untuk refresh session.
+// Ini mengatasi masalah: session expired tapi cookie masih valid.
+if (!empty($_COOKIE['sso_token'])) {
     $token = $_COOKIE['sso_token'];
     $parts = explode('.', $token);
     if (count($parts) === 3) {
@@ -35,11 +36,15 @@ if (!empty($_COOKIE['sso_token']) && empty($_SESSION['user_data'])) {
                 'kode_kantor' => $payload['kode_kantor'] ?? '000',
             ];
         } else {
-            // Token expired atau invalid, hapus cookie
+            // Token expired atau invalid
             setcookie('sso_token', '', time() - 3600, '/');
             unset($_COOKIE['sso_token']);
+            unset($_SESSION['user_data']);
         }
     }
+} else {
+    // Tidak ada cookie, pastikan session juga bersih
+    unset($_SESSION['user_data']);
 }
 
 // =========================

@@ -213,6 +213,20 @@ class AuthController
         // Set cookie
         setAuthCookie($token);
 
+        // JUGA set session langsung (agar redirect ke /home langsung bisa akses)
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['user_data'] = [
+            'token' => $token,
+            'employee_id' => $user['data']['employee_id'],
+            'full_name' => $user['data']['full_name'],
+            'role' => $user['data']['role'],
+            'permissions' => $user['data']['permissions'],
+            'branch' => $user['data']['branch_name'],
+            'kode_kantor' => $user['data']['kode'] ?? '000',
+        ];
+
         // Response sesuai format yang diminta
         sendResponse(200, 'OK', [
             'token' => $token,

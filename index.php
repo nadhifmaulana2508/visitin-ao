@@ -16,12 +16,29 @@ define('BASE_APP',
 );
 
 // =========================
-// SSO COOKIE -> SESSION BRIDGE
+// COOKIE -> SESSION BRIDGE (DUMMY MODE)
 // =========================
-// Kalau cookie sso_token ada tapi session belum terisi, anggap user sudah login.
-// Ini memungkinkan auto-login lintas aplikasi internal (monbis, report-dpk, dll).
+// Decode token dari cookie dan simpan data user ke session.
 if (!empty($_COOKIE['sso_token']) && empty($_SESSION['user_data'])) {
-    $_SESSION['user_data'] = ['token' => $_COOKIE['sso_token']];
+    $token = $_COOKIE['sso_token'];
+    $parts = explode('.', $token);
+    if (count($parts) === 3) {
+        $payload = json_decode(base64_decode($parts[1]), true);
+        if ($payload && isset($payload['sub']) && (!isset($payload['exp']) || $payload['exp'] >= time())) {
+            $_SESSION['user_data'] = [
+                'token' => $token,
+                'employee_id' => $payload['sub'],
+                'full_name' => $payload['name'] ?? '',
+                'role' => $payload['role'] ?? 'staff',
+                'permissions' => $payload['permissions'] ?? [],
+                'branch' => $payload['branch'] ?? '',
+            ];
+        } else {
+            // Token expired atau invalid, hapus cookie
+            setcookie('sso_token', '', time() - 3600, '/');
+            unset($_COOKIE['sso_token']);
+        }
+    }
 }
 
 // =========================

@@ -50,6 +50,48 @@ switch ($action) {
         (new AuthController())->logout();
         break;
 
+    // ===================== PROSPEK =====================
+    case 'create_prospect':
+        if ($request_method !== 'POST') {
+            sendResponse(405, 'Method harus POST', null);
+        }
+        $data = readJsonBody();
+        // Dummy: simpan ke session sebagai storage sementara
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        if (!isset($_SESSION['prospects'])) $_SESSION['prospects'] = [];
+        
+        $newProspect = [
+            'id' => count($_SESSION['prospects']) + 1,
+            'prospect_type' => $data['prospect_type'] ?? '',
+            'customer_name' => $data['customer_name'] ?? '',
+            'identity_number' => $data['identity_number'] ?? null,
+            'phone_number' => $data['phone_number'] ?? '',
+            'product_interest' => $data['product_interest'] ?? null,
+            'estimated_amount' => $data['estimated_amount'] ?? 0,
+            'provinsi' => $data['provinsi'] ?? '',
+            'kab_kota' => $data['kab_kota'] ?? '',
+            'kecamatan' => $data['kecamatan'] ?? '',
+            'desa' => $data['desa'] ?? '',
+            'address' => $data['address'] ?? '',
+            'description' => $data['description'] ?? '',
+            'is_ao_input' => $data['is_ao_input'] ?? false,
+            'delegation_status' => ($data['is_ao_input'] ?? false) ? 'SUDAH_DIDELEGASIKAN' : 'BELUM_DIDELEGASIKAN',
+            'status' => 'OPEN',
+            'created_by' => $_SESSION['user_data']['employee_id'] ?? 'unknown',
+            'created_by_name' => $_SESSION['user_data']['full_name'] ?? 'Unknown',
+            'created_at' => date('Y-m-d H:i:s'),
+            'assigned_to' => ($data['is_ao_input'] ?? false) ? ($_SESSION['user_data']['employee_id'] ?? null) : null,
+        ];
+        $_SESSION['prospects'][] = $newProspect;
+        sendResponse(201, 'Prospek berhasil disimpan', $newProspect);
+        break;
+
+    case 'get_prospects':
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        $prospects = $_SESSION['prospects'] ?? [];
+        sendResponse(200, 'OK', $prospects);
+        break;
+
     // ===================== KUNJUNGAN =====================
     case 'get_mapping':
         // Nanti di sini include controllernya

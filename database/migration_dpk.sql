@@ -70,8 +70,11 @@ CREATE TABLE `prospects` (
     `customer_name` VARCHAR(200) NOT NULL,
     `identity_number` VARCHAR(20) DEFAULT NULL COMMENT 'No KTP/identitas',
     `phone_number` VARCHAR(20) NOT NULL,
-    `product_interest` VARCHAR(150) DEFAULT NULL COMMENT 'Produk yang diminati',
-    `estimated_amount` BIGINT UNSIGNED DEFAULT 0 COMMENT 'Nominal estimasi (Rp)',
+    
+    -- Data Usaha & Produk
+    `jenis_usaha` VARCHAR(50) DEFAULT NULL COMMENT 'Pertanian|Perikanan|Peternakan|Perdagangan|Jasa|Industri Rumahan|Karyawan|Wiraswasta|Lainnya',
+    `rekomendasi_produk` ENUM('Tabungan','Deposito','Kredit','Aset') DEFAULT NULL COMMENT 'Dropdown produk rekomendasi',
+    `keterangan_usaha` TEXT DEFAULT NULL COMMENT 'Deskripsi usaha calon nasabah',
     
     -- Alamat
     `provinsi` VARCHAR(100) DEFAULT NULL,
@@ -94,9 +97,10 @@ CREATE TABLE `prospects` (
     -- Keterangan
     `description` TEXT DEFAULT NULL,
     
-    -- Tracking Input
-    `created_by` VARCHAR(20) NOT NULL COMMENT 'id_peg yang input',
+    -- Tracking Input & Referral
+    `created_by` VARCHAR(20) NOT NULL COMMENT 'id_peg yang input (referral)',
     `created_by_kode_kantor` VARCHAR(5) NOT NULL COMMENT 'Kantor penginput saat input',
+    `referral_by` VARCHAR(20) DEFAULT NULL COMMENT 'id_peg referal (sama dgn created_by, eksplisit untuk reporting)',
     `is_ao_input` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1=input oleh AO, 0=non-AO',
     
     -- Delegasi

@@ -48,40 +48,18 @@ $user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? '000';
         }
 
         /* =========================================
-           LAYOUT WRAPPER - RESPONSIVE
-           Mobile: full width, max 600px centered
-           Tablet: max 768px centered
-           Desktop: max 1200px, sidebar optional
+           LAYOUT WRAPPER - FULL WIDTH (no side spaces)
+           Semua device: full-width, no max-width constraint
         ========================================= */
         .mobile-wrapper {
-            max-width: var(--content-max);
-            margin: 0 auto;
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
             background-color: var(--color-bg);
             min-height: 100vh;
             min-height: 100dvh;
             position: relative;
             padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 15px);
-        }
-
-        /* Mobile: full edge-to-edge */
-        @media (max-width: 767px) {
-            .mobile-wrapper { max-width: 100%; }
-        }
-
-        /* Tablet: centered with side padding */
-        @media (min-width: 768px) and (max-width: 1023px) {
-            .mobile-wrapper { max-width: 768px; padding-left: 10px; padding-right: 10px; }
-        }
-
-        /* Desktop: centered with shadow */
-        @media (min-width: 1024px) {
-            body { background-color: #E8ECEF; }
-            .mobile-wrapper {
-                max-width: var(--content-max);
-                box-shadow: 0 0 40px rgba(0,0,0,0.06);
-                border-radius: 0 0 20px 20px;
-                background-color: var(--color-bg);
-            }
         }
 
 
@@ -91,9 +69,8 @@ $user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? '000';
         .bottom-nav {
             position: fixed;
             bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            max-width: var(--content-max);
+            left: 0;
+            right: 0;
             width: 100%;
             background: #ffffff;
             display: flex;
@@ -102,13 +79,7 @@ $user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? '000';
             padding: 8px 5px calc(8px + var(--safe-bottom)) 5px;
             box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
             z-index: 1000;
-            border-top-left-radius: 18px;
-            border-top-right-radius: 18px;
             height: var(--nav-height);
-        }
-
-        @media (max-width: 767px) {
-            .bottom-nav { max-width: 100%; border-radius: 0; }
         }
 
         .nav-item {
@@ -273,7 +244,7 @@ $user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? '000';
         .btn-fab {
             position: fixed;
             bottom: calc(var(--nav-height) + var(--safe-bottom) + 20px);
-            right: 20px; width: 56px; height: 56px; border-radius: 50%;
+            right: 24px; width: 56px; height: 56px; border-radius: 50%;
             background: var(--color-accent); color: white; border: none;
             box-shadow: 0 6px 20px rgba(255,123,84,0.4);
             display: flex; align-items: center; justify-content: center;
@@ -281,9 +252,6 @@ $user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? '000';
             text-decoration: none;
         }
         .btn-fab:active { transform: scale(0.9); }
-        @media (min-width: 1024px) {
-            .btn-fab { right: calc(50% - 580px); }
-        }
 
         /* Section title */
         .section-title {

@@ -79,8 +79,51 @@ if (strpos($url, 'api/') === 0) {
 // =========================
 // ROUTING DEFAULT
 // =========================
+
+// *** HANDLE LOGIN POST (fallback tanpa JS/fetch) ***
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($url === 'login' || $url === '')) {
+    $idPeg = trim($_POST['id_peg'] ?? '');
+    $password = $_POST['password'] ?? '';
+    
+    if ($idPeg !== '' && $password !== '') {
+        // Load dummy users dari AuthController
+        require_once __DIR__ . '/api/config/env.php';
+        require_once __DIR__ . '/api/helpers/response.php';
+        require_once __DIR__ . '/api/helpers/cookie.php';
+        require_once __DIR__ . '/api/controllers/AuthController.php';
+        
+        // Dummy users check
+        $dummyUsers = [
+            '102-119' => ['password' => '123456', 'full_name' => 'SYAIFUN NADHIF MAULANA, S. Kom', 'role' => 'developer', 'permissions' => ['DEV','SUPERUSER_PROSPEK','AO_KREDIT','AO_DANA','AO_REMEDIAL_FE','AO_REMEDIAL_BE'], 'branch_name' => 'Kantor Pusat', 'kode' => '000'],
+            '201-001' => ['password' => '123456', 'full_name' => 'BUDI SANTOSO', 'role' => 'ao_kredit', 'permissions' => ['AO_KREDIT'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
+            '201-002' => ['password' => '123456', 'full_name' => 'SITI RAHAYU', 'role' => 'ao_dana', 'permissions' => ['AO_DANA'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
+            '201-003' => ['password' => '123456', 'full_name' => 'ANDI SETIAWAN', 'role' => 'ao_remedial', 'permissions' => ['AO_REMEDIAL_FE','AO_REMEDIAL_BE'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
+            '201-004' => ['password' => '123456', 'full_name' => 'WAHYU HIDAYAT', 'role' => 'superuser', 'permissions' => ['SUPERUSER_PROSPEK'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
+            '201-005' => ['password' => '123456', 'full_name' => 'DEWI KUSUMA', 'role' => 'staff', 'permissions' => [], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
+            '201-006' => ['password' => '123456', 'full_name' => 'RATNA SARI', 'role' => 'staff', 'permissions' => [], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
+        ];
+        
+        if (isset($dummyUsers[$idPeg]) && $dummyUsers[$idPeg]['password'] === $password) {
+            $u = $dummyUsers[$idPeg];
+            $_SESSION['user_data'] = [
+                'token' => 'dummy',
+                'employee_id' => $idPeg,
+                'full_name' => $u['full_name'],
+                'role' => $u['role'],
+                'permissions' => $u['permissions'],
+                'branch' => $u['branch_name'],
+                'kode_kantor' => $u['kode'],
+            ];
+            header('Location: ' . BASE_APP . '/home');
+            exit;
+        } else {
+            $_SESSION['login_error'] = 'ID Pegawai atau Password salah.';
+        }
+    }
+}
+
 if ($url === '') {
-    // Kalau sudah login (ada SSO token), langsung ke home; jika belum, ke login.
+    // Kalau sudah login (ada session), langsung ke home; jika belum, ke login.
     $url = !empty($_SESSION['user_data']) ? 'home' : 'login';
 }
 

@@ -231,9 +231,15 @@
             <div class="login-card">
                 <h5 class="fw-bold text-dark mb-3 text-center" style="font-size:1.05rem;">Silakan Login</h5>
                 
-                <div id="login-alert"></div>
+                <div id="login-alert">
+                    <?php if (!empty($_SESSION['login_error'])): ?>
+                    <div class="alert alert-danger py-2 small mb-3" style="border-radius:8px; font-size:0.8rem;">
+                        <?= $_SESSION['login_error'] ?>
+                    </div>
+                    <?php unset($_SESSION['login_error']); endif; ?>
+                </div>
 
-                <form id="form-login">
+                <form id="form-login" method="POST" action="<?= BASE_APP ?>/login">
                     <div class="mb-3">
                         <label class="form-label" style="font-size:0.75rem; font-weight:700; color:#64748B;">ID Pegawai</label>
                         <input type="text" name="id_peg" id="input_id_peg" class="form-control-login" placeholder="Contoh: 102-119" required autofocus>
@@ -288,58 +294,6 @@
 
 <script>
 (function () {
-    const form = document.getElementById('form-login');
-    const alertBox = document.getElementById('login-alert');
-    const btn = document.getElementById('btn-login');
-    const BASE_APP = <?= json_encode(BASE_APP) ?>;
-
-    function showAlert(type, msg) {
-        alertBox.innerHTML = '<div class="alert alert-'+type+' py-2 small mb-3" style="border-radius:8px; font-size:0.8rem;">'+msg+'</div>';
-    }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        alertBox.innerHTML = '';
-        btn.disabled = true;
-        btn.textContent = 'Memproses...';
-
-        const fd = new FormData(form);
-        const payload = {
-            id_peg: (fd.get('id_peg') || '').trim(),
-            password: (fd.get('password') || ''),
-            app: 'visitin_ao'
-        };
-
-        try {
-            const res = await fetch(BASE_APP + '/api/?action=login', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const body = await res.json().catch(() => ({}));
-
-            if (res.ok && body.status === 200) {
-                const userData = body.data || {};
-                localStorage.setItem('user_data', JSON.stringify(userData));
-                localStorage.setItem('user_role', userData.role || 'staff');
-                localStorage.setItem('user_permissions', JSON.stringify(userData.permissions || []));
-                localStorage.setItem('user_name', userData.full_name || '');
-                localStorage.setItem('user_branch', userData.branch_name || '');
-
-                showAlert('success', '<i class="fa-solid fa-check-circle me-1"></i> Login berhasil!');
-                setTimeout(() => { window.location.href = BASE_APP + '/home'; }, 400);
-                return;
-            }
-            showAlert('danger', body.message || 'Login gagal. Periksa ID dan password.');
-        } catch (err) {
-            showAlert('danger', 'Tidak bisa terhubung ke server.');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Login';
-        }
-    });
-
     // Slider auto-rotate
     let currentSlide = 1;
     const totalSlides = 4;

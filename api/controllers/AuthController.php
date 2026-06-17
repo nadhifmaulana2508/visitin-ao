@@ -149,6 +149,7 @@ class AuthController
             'role' => $userData['role'],
             'permissions' => $userData['permissions'],
             'branch' => $userData['branch_name'],
+            'kode_kantor' => $userData['kode'] ?? '000',
             'iat' => time(),
             'exp' => time() + (14 * 24 * 60 * 60), // 14 hari
         ]));

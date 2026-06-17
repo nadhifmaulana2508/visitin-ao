@@ -32,6 +32,7 @@ if (!empty($_COOKIE['sso_token']) && empty($_SESSION['user_data'])) {
                 'role' => $payload['role'] ?? 'staff',
                 'permissions' => $payload['permissions'] ?? [],
                 'branch' => $payload['branch'] ?? '',
+                'kode_kantor' => $payload['kode_kantor'] ?? '000',
             ];
         } else {
             // Token expired atau invalid, hapus cookie

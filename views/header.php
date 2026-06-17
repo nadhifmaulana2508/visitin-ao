@@ -5,7 +5,7 @@ $title = isset($page_title) ? $page_title : 'Visitin AO';
 $user_role = $_SESSION['user_data']['role'] ?? 'staff';
 $user_name = $_SESSION['user_data']['full_name'] ?? 'User';
 $user_permissions = $_SESSION['user_data']['permissions'] ?? [];
-$user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? '000';
+$user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? ($_SESSION['user_data']['kode'] ?? '000');
 ?>
 <!DOCTYPE html>
 <html lang="id">

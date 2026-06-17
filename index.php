@@ -18,8 +18,8 @@ define('BASE_APP',
 // =========================
 // COOKIE -> SESSION BRIDGE (DUMMY MODE)
 // =========================
-// SELALU decode token dari cookie setiap request untuk refresh session.
-// Ini mengatasi masalah: session expired tapi cookie masih valid.
+// Jika ada cookie sso_token, decode dan refresh session dari token.
+// Jika tidak ada cookie, JANGAN hapus session (karena login POST set session tanpa cookie).
 if (!empty($_COOKIE['sso_token'])) {
     $token = $_COOKIE['sso_token'];
     $parts = explode('.', $token);
@@ -42,10 +42,8 @@ if (!empty($_COOKIE['sso_token'])) {
             unset($_SESSION['user_data']);
         }
     }
-} else {
-    // Tidak ada cookie, pastikan session juga bersih
-    unset($_SESSION['user_data']);
 }
+// NOTE: Jika tidak ada cookie tapi session ada (dari POST login), biarkan session hidup.
 
 // =========================
 // AMBIL URL DARI REQUEST URI (ANTI BADAI NGINX)

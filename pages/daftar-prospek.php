@@ -3,9 +3,8 @@ $is_ao = in_array($user_role, ['ao_kredit', 'ao_dana', 'ao_remedial', 'developer
 $is_superuser = in_array($user_role, ['superuser', 'developer']);
 $is_pusat = ($user_kode_kantor === '000');
 
-// Default dates for report
-$default_closing_start = date('Y-m-01', strtotime('last month'));
-$default_closing_end = date('Y-m-t', strtotime('last month'));
+// Default filter: closing_date akhir bulan kemarin, harian_date hari ini
+$default_closing_date = date('Y-m-t', strtotime('last month'));
 $default_harian = date('Y-m-d');
 
 // URL params (pre-fill filters)
@@ -198,24 +197,14 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
                 </select>
             </div>
         </div>
-        <div class="filter-row mb-2">
-            <div class="filter-item">
-                <label style="font-size:0.6rem; font-weight:700; color:#64748B;">Dari Tanggal</label>
-                <input type="date" class="filter-select" id="f-date-from">
-            </div>
-            <div class="filter-item">
-                <label style="font-size:0.6rem; font-weight:700; color:#64748B;">Sampai Tanggal</label>
-                <input type="date" class="filter-select" id="f-date-to" value="<?= $default_harian ?>">
-            </div>
-        </div>
         <div class="filter-row">
             <div class="filter-item">
-                <label style="font-size:0.6rem; font-weight:700; color:#64748B;">Closing Dari</label>
-                <input type="date" class="filter-select" id="f-cl-from" value="<?= $default_closing_start ?>">
+                <label style="font-size:0.6rem; font-weight:700; color:#64748B;">Closing Date</label>
+                <input type="date" class="filter-select" id="f-closing-date" value="<?= $default_closing_date ?>">
             </div>
             <div class="filter-item">
-                <label style="font-size:0.6rem; font-weight:700; color:#64748B;">Closing Sampai</label>
-                <input type="date" class="filter-select" id="f-cl-to" value="<?= $default_closing_end ?>">
+                <label style="font-size:0.6rem; font-weight:700; color:#64748B;">Harian Date</label>
+                <input type="date" class="filter-select" id="f-harian-date" value="<?= $default_harian ?>">
             </div>
         </div>
         <button class="btn-filter-apply w-100 mt-3" onclick="loadData()">
@@ -260,6 +249,9 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
     const urlType = '<?= $url_type ?>';
     const urlSource = '<?= $url_source ?>';
     const urlView = '<?= $url_view ?>';
+    const userRole = <?= json_encode($user_role) ?>;
+    const userKodeKantor = <?= json_encode($user_kode_kantor) ?>;
+    const isPusat = <?= $is_pusat ? 'true' : 'false' ?>;
 
     let currentPage = 1;
     let currentSource = urlSource || 'all';
@@ -304,6 +296,11 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
         const filtered = korwil ? allCabang.filter(c => c.korwil === korwil) : allCabang.filter(c => c.kode_kantor !== '000');
         fCabang.innerHTML = '<option value="">Semua Cabang</option>';
         filtered.forEach(c => { fCabang.innerHTML += `<option value="${c.kode_kantor}">${c.kode_kantor} - ${c.nama_kantor}</option>`; });
+        if (!isPusat && userKodeKantor !== '000') {
+            fCabang.value = userKodeKantor;
+            fCabang.disabled = true;
+            fKorwil.disabled = true;
+        }
     }
     fKorwil.addEventListener('change', renderCabangFilter);
     loadCabangFilter();
@@ -331,8 +328,8 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
             status: document.getElementById('f-status').value,
             korwil: fKorwil.value,
             kode_kantor: fCabang.value,
-            date_from: document.getElementById('f-date-from').value,
-            date_to: document.getElementById('f-date-to').value,
+            closing_date: document.getElementById('f-closing-date').value,
+            harian_date: document.getElementById('f-harian-date').value,
             page: currentPage,
             limit: 20,
         });
@@ -343,6 +340,7 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
             const body = await res.json();
             if (body.status === 200 && body.data) {
                 renderList(body.data.items || [], body.data.pagination || {});
+                loadSummaryStats();
             } else {
                 renderList([], {});
             }
@@ -368,7 +366,6 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
             const typeBadge = getTypeBadge(p.prospect_type);
             const statusBadge = getStatusBadge(p.status);
             const delBadge = p.delegation_status === 'BELUM_DIDELEGASIKAN' ? '<span class="badge-delegasi del-pending">Pending</span>' : '';
-            const nominal = p.estimated_amount ? formatRupiah(p.estimated_amount) : '-';
             const cabang = p.nama_kantor ? `${p.kode_kantor} - ${p.nama_kantor}` : p.kode_kantor;
             return `<a href="${BASE_APP}/prospek-detail/${p.id}" class="prospek-card ${typeClass}">
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -376,8 +373,8 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
                     <div class="d-flex gap-1">${delBadge}${statusBadge}</div>
                 </div>
                 <div class="p-name">${p.customer_name}</div>
-                <div class="p-meta"><i class="fa-solid fa-box-open"></i>${p.product_interest || '-'}</div>
-                <div class="p-meta"><i class="fa-solid fa-money-bill"></i>${nominal}</div>
+                <div class="p-meta"><i class="fa-solid fa-box-open"></i>${p.rekomendasi_produk || '-'}</div>
+                <div class="p-meta"><i class="fa-solid fa-briefcase"></i>${p.jenis_usaha || '-'}</div>
                 <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px solid #F4F7F6;">
                     <span class="p-meta mb-0"><i class="fa-solid fa-building"></i>${cabang}</span>
                     <span style="font-size:0.6rem;color:#94A3B8;">${formatDate(p.created_at)}</span>
@@ -397,6 +394,27 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
         document.getElementById('s-sla').textContent = counts.SLA;
         document.getElementById('s-closing').textContent = counts.CLOSING;
         document.getElementById('s-reject').textContent = counts.REJECT;
+    }
+
+    async function loadSummaryStats() {
+        const params = new URLSearchParams({
+            source: currentSource === 'pending' ? 'all' : currentSource,
+            korwil: fKorwil.value,
+            kode_kantor: fCabang.value,
+            closing_date: document.getElementById('f-closing-date').value || '<?= $default_closing_date ?>',
+            harian_date: document.getElementById('f-harian-date').value || '<?= $default_harian ?>',
+        });
+
+        try {
+            const res = await fetch(BASE_APP + '/api/?action=prospect_report&' + params.toString(), {credentials:'include'});
+            const body = await res.json();
+            const s = body.data?.summary || {};
+            document.getElementById('s-open').textContent = s.total_open || 0;
+            document.getElementById('s-fu').textContent = s.total_follow_up || 0;
+            document.getElementById('s-sla').textContent = s.total_sla || 0;
+            document.getElementById('s-closing').textContent = s.total_closing || 0;
+            document.getElementById('s-reject').textContent = s.total_reject || 0;
+        } catch(e) {}
     }
 
     function renderPagination(pg) {
@@ -419,9 +437,8 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
             source: currentSource === 'pending' ? 'all' : currentSource,
             korwil: fKorwil.value,
             kode_kantor: fCabang.value,
-            closing_from: document.getElementById('f-cl-from').value,
-            closing_to: document.getElementById('f-cl-to').value,
-            harian_date: document.getElementById('f-date-to').value || '<?= $default_harian ?>',
+            closing_date: document.getElementById('f-closing-date').value || '<?= $default_closing_date ?>',
+            harian_date: document.getElementById('f-harian-date').value || '<?= $default_harian ?>',
         });
         try {
             const res = await fetch(BASE_APP + '/api/?action=prospect_report&' + params.toString(), {credentials:'include'});
@@ -450,7 +467,7 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
             </div>
         </div>
         <div class="report-card">
-            <div class="report-title">Input Hari Ini (${hr.date||'-'})</div>
+            <div class="report-title">Input Periode Berjalan (${hr.from||'-'} s/d ${hr.date||'-'})</div>
             <div class="report-value">${hr.jumlah_input||0} <span style="font-size:0.8rem;font-weight:600;color:#64748B;">prospek baru</span></div>
         </div>
         <div class="report-card">

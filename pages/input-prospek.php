@@ -6,15 +6,17 @@ $is_pusat = ($user_kode_kantor === '000');
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-    .page-header { background: linear-gradient(135deg, #1565C0, #0D47A1); color: white; padding: 20px; }
+    .page-header { background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); color: white; padding: 20px; }
     .page-header h4 { font-weight: 800; margin: 0; font-size: 1.1rem; }
     .page-header p { margin: 4px 0 0 0; font-size: 0.75rem; opacity: 0.7; }
 
+    #form-prospek { width: 100%; max-width: 1100px; margin: 0 auto; padding-bottom: 10px; }
     .form-section { background: #fff; border-radius: 12px; padding: 20px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     @media(min-width:768px) { .form-section { margin: 20px 32px; padding: 28px; } }
+    @media(min-width:1200px) { .form-section { margin-left: 0; margin-right: 0; } }
     .form-section + .form-section { margin-top: 0; }
 
-    .section-label { font-size: 0.72rem; font-weight: 800; color: #1565C0; text-transform: uppercase; margin-bottom: 16px; letter-spacing: 0.5px; }
+    .section-label { font-size: 0.72rem; font-weight: 800; color: var(--color-primary); text-transform: uppercase; margin-bottom: 16px; letter-spacing: 0.5px; }
     .field-label { font-size: 0.75rem; font-weight: 700; color: #374151; margin-bottom: 6px; display: block; }
     .field-label .req { color: #DC2626; }
 
@@ -23,11 +25,26 @@ $is_pusat = ($user_kode_kantor === '000');
         font-size: 0.88rem; color: #1F2937; background: #fff; transition: border 0.2s;
         min-height: 42px;
     }
-    .field-input:focus { border-color: #1565C0; outline: none; box-shadow: 0 0 0 2px rgba(21,101,192,0.1); }
+    .field-input:focus { border-color: var(--color-primary); outline: none; box-shadow: 0 0 0 2px rgba(10,25,49,0.1); }
     .field-input:disabled { background: #F3F4F6; color: #6B7280; }
     .field-input::placeholder { color: #9CA3AF; }
     select.field-input { appearance: auto; }
     textarea.field-input { resize: vertical; min-height: 70px; }
+    .field-help { display:block; margin-top:4px; font-size:0.65rem; color:#64748B; }
+    .search-select { position: relative; }
+    .search-options {
+        display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+        max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #D1D5DB;
+        border-radius: 10px; box-shadow: 0 12px 24px rgba(15,23,42,0.12); z-index: 1040;
+    }
+    .search-select.open .search-options { display: block; }
+    .search-option {
+        width: 100%; border: 0; background: #fff; text-align: left; padding: 10px 12px;
+        font-size: 0.82rem; font-weight: 650; color: #334155; cursor: pointer;
+    }
+    .search-option:hover, .search-option:focus { background: #F4F7F6; outline: none; }
+    .search-empty { padding: 12px; font-size: 0.76rem; color: #94A3B8; }
+    .search-select.disabled .search-options { display: none; }
 
     .row-fields { display: grid; gap: 12px; grid-template-columns: 1fr; }
     @media(min-width:576px) { .row-fields { grid-template-columns: 1fr 1fr; } }
@@ -35,20 +52,20 @@ $is_pusat = ($user_kode_kantor === '000');
 
     /* Foto */
     .foto-area { border: 2px dashed #D1D5DB; border-radius: 12px; padding: 16px; text-align: center; position: relative; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: border-color 0.2s; }
-    .foto-area.has-foto { border-color: #1565C0; border-style: solid; }
+    .foto-area.has-foto { border-color: var(--color-primary); border-style: solid; }
     .foto-area img { max-width: 100%; max-height: 250px; border-radius: 8px; object-fit: cover; }
     .foto-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
     .btn-foto { padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; border: 1px solid #D1D5DB; background: #F9FAFB; color: #374151; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
     .btn-foto:hover { background: #E5E7EB; }
-    .btn-foto.primary { background: #1565C0; color: white; border-color: #1565C0; }
-    .btn-foto.primary:hover { background: #0D47A1; }
+    .btn-foto.primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+    .btn-foto.primary:hover { background: var(--color-secondary); }
     .foto-status { font-size: 0.7rem; color: #6B7280; }
 
     /* GPS */
     .gps-row { display: flex; gap: 8px; align-items: stretch; }
     .gps-row .field-input { flex: 1; }
-    .btn-gps { min-width: 46px; border: none; border-radius: 8px; background: #1565C0; color: white; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-    .btn-gps:hover { background: #0D47A1; }
+    .btn-gps { min-width: 46px; border: none; border-radius: 8px; background: var(--color-primary); color: white; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+    .btn-gps:hover { background: var(--color-secondary); }
     .btn-gps.done { background: #16A34A; }
     #static-map { width: 100%; height: 180px; border-radius: 8px; margin-top: 10px; border: 1px solid #E5E7EB; display: none; }
     @media(min-width:768px) { #static-map { height: 220px; } }
@@ -57,6 +74,7 @@ $is_pusat = ($user_kode_kantor === '000');
     .btn-submit { width: 100%; padding: 14px; border: none; border-radius: 10px; background: #FF7B54; color: white; font-weight: 800; font-size: 0.95rem; cursor: pointer; margin: 16px 0 80px 0; box-shadow: 0 4px 12px rgba(255,123,84,0.3); transition: 0.2s; }
     .btn-submit:hover { background: #E66A45; }
     .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    @media(min-width:1200px) { .submit-wrap { padding-left: 0 !important; padding-right: 0 !important; } }
 
     /* Info badge */
     .info-badge { background: #ECFDF5; color: #065F46; font-size: 0.72rem; padding: 8px 12px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 6px; margin-top: 10px; }
@@ -77,6 +95,7 @@ $is_pusat = ($user_kode_kantor === '000');
 </div>
 
 <form id="form-prospek" method="POST" action="<?= BASE_APP ?>/api/?action=prospect_create" enctype="multipart/form-data">
+<input type="hidden" name="prospect_type" id="inp-prospect-type">
 
 <!-- DATA USAHA & PRODUK -->
 <div class="form-section">
@@ -134,15 +153,18 @@ $is_pusat = ($user_kode_kantor === '000');
         </div>
         <div>
             <label class="field-label">Cabang Tujuan <span class="req">*</span></label>
-            <select class="field-input" name="kode_kantor" id="sel-cabang" required>
-                <option value="">-- Ketik untuk cari cabang --</option>
-            </select>
+            <div class="search-select" id="combo-cabang">
+                <input type="text" class="field-input" id="inp-cabang-search" placeholder="Ketik kode/nama cabang" autocomplete="off" required>
+                <div class="search-options" id="menu-cabang"></div>
+            </div>
+            <input type="hidden" name="kode_kantor" id="sel-cabang">
+            <small class="field-help">Contoh: 001 atau Kc. Utama.</small>
         </div>
     </div>
 
     <?php if ($is_ao): ?>
     <div class="info-badge" id="badge-auto" style="display:none;">
-        <i class="fa-solid fa-bolt"></i> Auto-delegasi: prospek langsung masuk pipeline Anda
+        <i class="fa-solid fa-user-check"></i> Prospek akan didelegasikan ke AO sesuai produk dan cabang tujuan.
     </div>
     <?php else: ?>
     <div class="info-badge warn">
@@ -168,12 +190,33 @@ $is_pusat = ($user_kode_kantor === '000');
         </div>
         <div>
             <label class="field-label">Wilayah Administratif</label>
-            <select class="field-input" name="kab_kota" id="sel-kabkota" style="margin-bottom:8px;">
-                <option value="">-- Pilih Kab/Kota --</option>
-            </select>
-            <select class="field-input" name="kecamatan" id="sel-kecamatan" disabled>
-                <option value="">-- Pilih Kecamatan --</option>
-            </select>
+            <div class="search-select" id="combo-provinsi" style="margin-bottom:8px;">
+                <input type="text" class="field-input" id="inp-provinsi" placeholder="Ketik provinsi" autocomplete="off">
+                <div class="search-options" id="menu-provinsi"></div>
+            </div>
+            <input type="hidden" name="provinsi" id="sel-provinsi">
+            <input type="hidden" id="sel-provinsi-id">
+
+            <div class="search-select disabled" id="combo-kabkota" style="margin-bottom:8px;">
+                <input type="text" class="field-input" id="inp-kabkota" placeholder="Ketik kab/kota" autocomplete="off" disabled>
+                <div class="search-options" id="menu-kabkota"></div>
+            </div>
+            <input type="hidden" name="kab_kota" id="sel-kabkota">
+            <input type="hidden" id="sel-kabkota-id">
+
+            <div class="search-select disabled" id="combo-kecamatan" style="margin-bottom:8px;">
+                <input type="text" class="field-input" id="inp-kecamatan" placeholder="Ketik kecamatan" autocomplete="off" disabled>
+                <div class="search-options" id="menu-kecamatan"></div>
+            </div>
+            <input type="hidden" name="kecamatan" id="sel-kecamatan">
+            <input type="hidden" id="sel-kecamatan-id">
+
+            <div class="search-select disabled" id="combo-desa">
+                <input type="text" class="field-input" id="inp-desa" placeholder="Ketik desa/kelurahan" autocomplete="off" disabled>
+                <div class="search-options" id="menu-desa"></div>
+            </div>
+            <input type="hidden" name="desa" id="sel-desa">
+            <input type="hidden" id="sel-desa-id">
         </div>
     </div>
     <div style="margin-top:12px;">
@@ -211,7 +254,7 @@ $is_pusat = ($user_kode_kantor === '000');
 </div>
 
 <!-- SUBMIT -->
-<div style="padding: 0 16px;">
+<div class="submit-wrap" style="padding: 0 16px;">
     <button type="submit" class="btn-submit" id="btn-submit">
         <i class="fa-solid fa-paper-plane me-2"></i> Simpan Prospek
     </button>
@@ -256,35 +299,225 @@ $is_pusat = ($user_kode_kantor === '000');
         {k:'022',n:'Kc. Kab. Tegal'},{k:'023',n:'Kc. Brebes'},{k:'024',n:'Kc. Kota Tegal'},
         {k:'025',n:'Kc. Pemalang'},{k:'026',n:'Kc. Kota Pekalongan'},{k:'027',n:'Kc. Kab. Pekalongan'},{k:'028',n:'Kc. Batang'}
     ];
-    const selCab = document.getElementById('sel-cabang');
-    selCab.innerHTML = '<option value="">-- Pilih Cabang --</option>';
-    cabangData.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c.k; o.textContent = c.k + ' - ' + c.n;
-        if (c.k === userKK && userKK !== '000') o.selected = true;
-        selCab.appendChild(o);
+    const cabangInput = document.getElementById('inp-cabang-search');
+    const cabangHidden = document.getElementById('sel-cabang');
+    const cabangCombo = document.getElementById('combo-cabang');
+    const cabangMenu = document.getElementById('menu-cabang');
+    bindSearchSelect(cabangCombo, cabangInput, cabangMenu, cabangData, {
+        getLabel: c => `${c.k} - ${c.n}`,
+        onSelect: c => { cabangHidden.value = c.k; },
+        onClear: value => {
+            const selected = findCabang(value);
+            cabangHidden.value = selected ? selected.k : '';
+        }
+    });
+    if (userKK !== '000') {
+        const current = cabangData.find(c => c.k === userKK);
+        if (current) {
+            cabangInput.value = `${current.k} - ${current.n}`;
+            cabangHidden.value = current.k;
+        }
+    }
+    cabangInput.addEventListener('input', function() {
+        const selected = findCabang(this.value);
+        cabangHidden.value = selected ? selected.k : '';
+    });
+    cabangInput.addEventListener('blur', function() {
+        const selected = findCabang(this.value);
+        if (selected) this.value = `${selected.k} - ${selected.n}`;
     });
 
-    // ===================== WILAYAH (Jateng only - simplified) =====================
-    const API_W = 'https://www.emsifa.com/api-wilayah-indonesia/api';
-    const selKab = document.getElementById('sel-kabkota');
-    const selKec = document.getElementById('sel-kecamatan');
+    function findCabang(value) {
+        const text = String(value || '').toLowerCase().trim();
+        if (!text) return null;
+        return cabangData.find(c => `${c.k} - ${c.n}`.toLowerCase() === text)
+            || cabangData.find(c => c.k.toLowerCase() === text || c.n.toLowerCase() === text)
+            || cabangData.find(c => `${c.k} ${c.n}`.toLowerCase().includes(text));
+    }
 
-    // Load kab/kota Jawa Tengah (id=33)
-    fetch(API_W + '/regencies/33.json').then(r=>r.json()).then(d => {
-        selKab.innerHTML = '<option value="">-- Pilih Kab/Kota --</option>';
-        d.forEach(k => { selKab.innerHTML += `<option value="${k.id}" data-name="${k.name}">${k.name}</option>`; });
+    // ===================== WILAYAH (searchable) =====================
+    const API_W = 'https://www.emsifa.com/api-wilayah-indonesia/api';
+    const wilayah = { provinces: [], regencies: [], districts: [], villages: [] };
+    const provInput = document.getElementById('inp-provinsi');
+    const kabInput = document.getElementById('inp-kabkota');
+    const kecInput = document.getElementById('inp-kecamatan');
+    const desaInput = document.getElementById('inp-desa');
+    const provHidden = document.getElementById('sel-provinsi');
+    const kabHidden = document.getElementById('sel-kabkota');
+    const kecHidden = document.getElementById('sel-kecamatan');
+    const desaHidden = document.getElementById('sel-desa');
+    const provId = document.getElementById('sel-provinsi-id');
+    const kabId = document.getElementById('sel-kabkota-id');
+    const kecId = document.getElementById('sel-kecamatan-id');
+    const desaId = document.getElementById('sel-desa-id');
+    const provCombo = document.getElementById('combo-provinsi');
+    const kabCombo = document.getElementById('combo-kabkota');
+    const kecCombo = document.getElementById('combo-kecamatan');
+    const desaCombo = document.getElementById('combo-desa');
+    const provMenu = document.getElementById('menu-provinsi');
+    const kabMenu = document.getElementById('menu-kabkota');
+    const kecMenu = document.getElementById('menu-kecamatan');
+    const desaMenu = document.getElementById('menu-desa');
+
+    const provSelect = bindSearchSelect(provCombo, provInput, provMenu, wilayah.provinces, {
+        getLabel: row => row.name,
+        onSelect: setProvince,
+        onClear: value => { provHidden.value = value.trim(); provId.value = ''; clearWilayah(1); }
+    });
+    const kabSelect = bindSearchSelect(kabCombo, kabInput, kabMenu, wilayah.regencies, {
+        getLabel: row => row.name,
+        onSelect: setRegency,
+        onClear: value => { kabHidden.value = value.trim(); kabId.value = ''; clearWilayah(2); }
+    });
+    const kecSelect = bindSearchSelect(kecCombo, kecInput, kecMenu, wilayah.districts, {
+        getLabel: row => row.name,
+        onSelect: setDistrict,
+        onClear: value => { kecHidden.value = value.trim(); kecId.value = ''; clearWilayah(3); }
+    });
+    const desaSelect = bindSearchSelect(desaCombo, desaInput, desaMenu, wilayah.villages, {
+        getLabel: row => row.name,
+        onSelect: row => { desaHidden.value = row.name; desaId.value = row.id; },
+        onClear: value => { desaHidden.value = value.trim(); desaId.value = ''; }
+    });
+
+    function bindSearchSelect(combo, input, menu, rowsRef, config) {
+        const api = {
+            rows: rowsRef,
+            setRows(rows) {
+                api.rows = rows;
+                renderOptions(input.value);
+            },
+            close() {
+                combo.classList.remove('open');
+            },
+            open() {
+                if (input.disabled) return;
+                renderOptions(input.value);
+                combo.classList.add('open');
+            }
+        };
+
+        function renderOptions(query) {
+            const needle = String(query || '').toLowerCase().trim();
+            const rows = api.rows
+                .filter(row => config.getLabel(row).toLowerCase().includes(needle))
+                .slice(0, 80);
+
+            if (rows.length === 0) {
+                menu.innerHTML = '<div class="search-empty">Tidak ada hasil</div>';
+                return;
+            }
+
+            menu.innerHTML = rows.map((row, idx) => {
+                const label = escapeHtml(config.getLabel(row));
+                return `<button type="button" class="search-option" data-idx="${idx}">${label}</button>`;
+            }).join('');
+
+            menu.querySelectorAll('.search-option').forEach((btn, idx) => {
+                btn.addEventListener('mousedown', e => e.preventDefault());
+                btn.addEventListener('click', () => {
+                    const row = rows[idx];
+                    input.value = config.getLabel(row);
+                    config.onSelect(row);
+                    api.close();
+                });
+            });
+        }
+
+        input.addEventListener('focus', api.open);
+        input.addEventListener('click', api.open);
+        input.addEventListener('input', function() {
+            config.onClear(this.value);
+            api.open();
+        });
+        input.addEventListener('blur', function() {
+            const selected = api.rows.find(row => config.getLabel(row).toLowerCase() === this.value.toLowerCase().trim());
+            if (selected) {
+                input.value = config.getLabel(selected);
+                config.onSelect(selected);
+            }
+            setTimeout(api.close, 120);
+        });
+
+        return api;
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function clearWilayah(level) {
+        if (level <= 1) {
+            kabInput.value = ''; kabInput.disabled = true; kabCombo.classList.add('disabled'); kabHidden.value = ''; kabId.value = ''; wilayah.regencies = []; kabSelect.setRows([]);
+        }
+        if (level <= 2) {
+            kecInput.value = ''; kecInput.disabled = true; kecCombo.classList.add('disabled'); kecHidden.value = ''; kecId.value = ''; wilayah.districts = []; kecSelect.setRows([]);
+        }
+        if (level <= 3) {
+            desaInput.value = ''; desaInput.disabled = true; desaCombo.classList.add('disabled'); desaHidden.value = ''; desaId.value = ''; wilayah.villages = []; desaSelect.setRows([]);
+        }
+    }
+
+    fetch(API_W + '/provinces.json').then(r => r.json()).then(rows => {
+        wilayah.provinces = rows;
+        provSelect.setRows(rows);
+
+        const jateng = rows.find(row => row.name.toUpperCase() === 'JAWA TENGAH');
+        if (jateng) {
+            provInput.value = jateng.name;
+            setProvince(jateng);
+        }
     }).catch(() => {});
 
-    selKab.addEventListener('change', function() {
-        selKec.innerHTML = '<option value="">Memuat...</option>'; selKec.disabled = true;
-        if (!this.value) return;
-        fetch(API_W + '/districts/' + this.value + '.json').then(r=>r.json()).then(d => {
-            selKec.innerHTML = '<option value="">-- Pilih Kecamatan --</option>';
-            d.forEach(k => { selKec.innerHTML += `<option value="${k.id}" data-name="${k.name}">${k.name}</option>`; });
-            selKec.disabled = false;
-        }).catch(() => { selKec.innerHTML = '<option value="">Gagal</option>'; });
-    });
+    function setProvince(row) {
+        provInput.value = row.name;
+        provHidden.value = row.name;
+        provId.value = row.id;
+        clearWilayah(1);
+        kabInput.disabled = false;
+        kabCombo.classList.remove('disabled');
+        kabInput.placeholder = 'Memuat kab/kota...';
+        fetch(API_W + '/regencies/' + row.id + '.json').then(r => r.json()).then(rows => {
+            wilayah.regencies = rows;
+            kabSelect.setRows(rows);
+            kabInput.placeholder = 'Ketik kab/kota';
+        }).catch(() => { kabInput.placeholder = 'Gagal memuat kab/kota'; });
+    }
+
+    function setRegency(row) {
+        kabInput.value = row.name;
+        kabHidden.value = row.name;
+        kabId.value = row.id;
+        clearWilayah(2);
+        kecInput.disabled = false;
+        kecCombo.classList.remove('disabled');
+        kecInput.placeholder = 'Memuat kecamatan...';
+        fetch(API_W + '/districts/' + row.id + '.json').then(r => r.json()).then(rows => {
+            wilayah.districts = rows;
+            kecSelect.setRows(rows);
+            kecInput.placeholder = 'Ketik kecamatan';
+        }).catch(() => { kecInput.placeholder = 'Gagal memuat kecamatan'; });
+    }
+
+    function setDistrict(row) {
+        kecInput.value = row.name;
+        kecHidden.value = row.name;
+        kecId.value = row.id;
+        clearWilayah(3);
+        desaInput.disabled = false;
+        desaCombo.classList.remove('disabled');
+        desaInput.placeholder = 'Memuat desa/kelurahan...';
+        fetch(API_W + '/villages/' + row.id + '.json').then(r => r.json()).then(rows => {
+            wilayah.villages = rows;
+            desaSelect.setRows(rows);
+            desaInput.placeholder = 'Ketik desa/kelurahan';
+        }).catch(() => { desaInput.placeholder = 'Gagal memuat desa/kelurahan'; });
+    }
 
     // ===================== GEOTAGGING =====================
     let map = null, marker = null;
@@ -381,10 +614,20 @@ $is_pusat = ($user_kode_kantor === '000');
         const payload = {};
         fd.forEach((v,k) => { if(v) payload[k] = v; });
 
-        // Set province tetap Jawa Tengah
-        payload.provinsi = 'JAWA TENGAH';
-        payload.kab_kota = selKab.options[selKab.selectedIndex]?.dataset?.name || '';
-        payload.kecamatan = selKec.options[selKec.selectedIndex]?.dataset?.name || '';
+        const selectedCabang = findCabang(cabangInput.value);
+        if (!selectedCabang) {
+            showToast('Pilih cabang tujuan dari daftar', 'warning');
+            cabangInput.focus();
+            btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane me-2"></i>Simpan Prospek';
+            return;
+        }
+
+        payload.kode_kantor = selectedCabang.k;
+        payload.provinsi = provHidden.value || provInput.value.trim();
+        payload.kab_kota = kabHidden.value || kabInput.value.trim();
+        payload.kecamatan = kecHidden.value || kecInput.value.trim();
+        payload.desa = desaHidden.value || desaInput.value.trim();
+        payload.prospect_type = mapProductToProspectType(payload.rekomendasi_produk || '');
         payload.is_ao_input = isAO;
 
         try {
@@ -410,7 +653,13 @@ $is_pusat = ($user_kode_kantor === '000');
     // Auto-delegasi badge
     document.getElementById('sel-produk').addEventListener('change', function() {
         const badge = document.getElementById('badge-auto');
+        document.getElementById('inp-prospect-type').value = mapProductToProspectType(this.value);
         if (badge && isAO) badge.style.display = this.value ? 'flex' : 'none';
     });
+
+    function mapProductToProspectType(product) {
+        const map = {Kredit: 'KREDIT', Tabungan: 'TABUNGAN', Deposito: 'DEPOSITO', Aset: 'PEMBELI_ASET'};
+        return map[product] || '';
+    }
 })();
 </script>

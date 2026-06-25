@@ -6,6 +6,34 @@ $user_role = $_SESSION['user_data']['role'] ?? 'staff';
 $user_name = $_SESSION['user_data']['full_name'] ?? 'User';
 $user_permissions = $_SESSION['user_data']['permissions'] ?? [];
 $user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? ($_SESSION['user_data']['kode'] ?? '000');
+$user_job_position = $_SESSION['user_data']['job_position'] ?? '';
+$user_group_jabatan = $_SESSION['user_data']['group_jabatan'] ?? '';
+
+$is_developer_menu = ($user_role === 'developer') || in_array('DEV', $user_permissions, true);
+$is_superuser_menu = ($user_role === 'superuser') || in_array('SUPERUSER_PROSPEK', $user_permissions, true) || $is_developer_menu;
+$is_ao_kredit_menu = in_array('AO_KREDIT', $user_permissions, true) || $is_developer_menu;
+$is_ao_dana_menu = in_array('AO_DANA', $user_permissions, true) || $is_developer_menu;
+$is_ao_remedial_menu = in_array('AO_REMEDIAL_FE', $user_permissions, true) || in_array('AO_REMEDIAL_BE', $user_permissions, true) || $is_developer_menu;
+$is_known_prospek_job = in_array($user_job_position, [
+    'Staf Sistem dan Jaringan TI',
+    'Account Officer Kredit',
+    'Account Officer Dana',
+    'Account Officer Remedial',
+    'Kepala Bidang Pemasaran',
+    'Teller',
+    'Customer Service',
+], true);
+
+$menu_access = [
+    'can_access_prospek' => $is_known_prospek_job || $is_superuser_menu || $is_ao_kredit_menu || $is_ao_dana_menu || $is_ao_remedial_menu,
+    'can_input_prospek' => $is_known_prospek_job || $is_superuser_menu || $is_ao_kredit_menu || $is_ao_dana_menu || $is_ao_remedial_menu,
+    'can_delegate_prospek' => $is_superuser_menu,
+    'can_view_report_prospek' => $is_superuser_menu || $user_kode_kantor === '000',
+    'can_access_mapping' => $is_superuser_menu || $is_ao_kredit_menu || $is_ao_remedial_menu,
+    'can_access_nominatif' => $is_superuser_menu || $is_ao_kredit_menu || $is_ao_remedial_menu,
+    'can_access_history' => true,
+    'can_access_profile' => true,
+];
 ?>
 <!DOCTYPE html>
 <html lang="id">

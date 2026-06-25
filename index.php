@@ -34,6 +34,8 @@ if (!empty($_COOKIE['sso_token'])) {
                 'permissions' => $payload['permissions'] ?? [],
                 'branch' => $payload['branch'] ?? '',
                 'kode_kantor' => $payload['kode_kantor'] ?? '000',
+                'job_position' => $payload['job_position'] ?? '',
+                'group_jabatan' => $payload['group_jabatan'] ?? '',
             ];
         } else {
             // Token expired atau invalid
@@ -92,13 +94,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($url === 'login' || $url === '')) 
         
         // Dummy users check
         $dummyUsers = [
-            '102-119' => ['password' => '123456', 'full_name' => 'SYAIFUN NADHIF MAULANA, S. Kom', 'role' => 'developer', 'permissions' => ['DEV','SUPERUSER_PROSPEK','AO_KREDIT','AO_DANA','AO_REMEDIAL_FE','AO_REMEDIAL_BE'], 'branch_name' => 'Kantor Pusat', 'kode' => '000'],
-            '201-001' => ['password' => '123456', 'full_name' => 'BUDI SANTOSO', 'role' => 'ao_kredit', 'permissions' => ['AO_KREDIT'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
-            '201-002' => ['password' => '123456', 'full_name' => 'SITI RAHAYU', 'role' => 'ao_dana', 'permissions' => ['AO_DANA'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
-            '201-003' => ['password' => '123456', 'full_name' => 'ANDI SETIAWAN', 'role' => 'ao_remedial', 'permissions' => ['AO_REMEDIAL_FE','AO_REMEDIAL_BE'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
-            '201-004' => ['password' => '123456', 'full_name' => 'WAHYU HIDAYAT', 'role' => 'superuser', 'permissions' => ['SUPERUSER_PROSPEK'], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
-            '201-005' => ['password' => '123456', 'full_name' => 'DEWI KUSUMA', 'role' => 'staff', 'permissions' => [], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
-            '201-006' => ['password' => '123456', 'full_name' => 'RATNA SARI', 'role' => 'staff', 'permissions' => [], 'branch_name' => 'Cabang Utama', 'kode' => '001'],
+            '102-119' => ['password' => '123456', 'full_name' => 'SYAIFUN NADHIF MAULANA, S. Kom', 'role' => 'developer', 'permissions' => ['DEV','SUPERUSER_PROSPEK','AO_KREDIT','AO_DANA','AO_REMEDIAL_FE','AO_REMEDIAL_BE'], 'branch_name' => 'Kantor Pusat', 'kode' => '000', 'job_position' => 'Staf Sistem dan Jaringan TI', 'group_jabatan' => 'Staf'],
+            '201-001' => ['password' => '123456', 'full_name' => 'BUDI SANTOSO', 'role' => 'ao_kredit', 'permissions' => ['AO_KREDIT'], 'branch_name' => 'Cabang Utama', 'kode' => '001', 'job_position' => 'Account Officer Kredit', 'group_jabatan' => 'AO Kredit'],
+            '201-002' => ['password' => '123456', 'full_name' => 'SITI RAHAYU', 'role' => 'ao_dana', 'permissions' => ['AO_DANA'], 'branch_name' => 'Cabang Utama', 'kode' => '001', 'job_position' => 'Account Officer Dana', 'group_jabatan' => 'AO Dana'],
+            '201-003' => ['password' => '123456', 'full_name' => 'ANDI SETIAWAN', 'role' => 'ao_remedial', 'permissions' => ['AO_REMEDIAL_FE','AO_REMEDIAL_BE'], 'branch_name' => 'Cabang Utama', 'kode' => '001', 'job_position' => 'Account Officer Remedial', 'group_jabatan' => 'AO Remedial'],
+            '201-004' => ['password' => '123456', 'full_name' => 'WAHYU HIDAYAT', 'role' => 'superuser', 'permissions' => ['SUPERUSER_PROSPEK'], 'branch_name' => 'Cabang Utama', 'kode' => '001', 'job_position' => 'Kepala Bidang Pemasaran', 'group_jabatan' => 'Pejabat'],
+            '201-005' => ['password' => '123456', 'full_name' => 'DEWI KUSUMA', 'role' => 'staff', 'permissions' => [], 'branch_name' => 'Cabang Utama', 'kode' => '001', 'job_position' => 'Teller', 'group_jabatan' => 'Staf'],
+            '201-006' => ['password' => '123456', 'full_name' => 'RATNA SARI', 'role' => 'staff', 'permissions' => [], 'branch_name' => 'Cabang Utama', 'kode' => '001', 'job_position' => 'Customer Service', 'group_jabatan' => 'Staf'],
         ];
         
         if (isset($dummyUsers[$idPeg]) && $dummyUsers[$idPeg]['password'] === $password) {
@@ -111,6 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($url === 'login' || $url === '')) 
                 'permissions' => $u['permissions'],
                 'branch' => $u['branch_name'],
                 'kode_kantor' => $u['kode'],
+                'job_position' => $u['job_position'],
+                'group_jabatan' => $u['group_jabatan'],
             ];
             header('Location: ' . BASE_APP . '/home');
             exit;

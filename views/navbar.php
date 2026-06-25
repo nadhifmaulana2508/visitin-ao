@@ -2,6 +2,7 @@
 // Navbar role-based: tampilkan menu sesuai role user
 $role = $user_role ?? 'staff';
 $perms = $user_permissions ?? [];
+$menu = $menu_access ?? [];
 
 // Helper: cek apakah user punya permission tertentu
 function hasPermission($perms, $code) {
@@ -14,7 +15,10 @@ $showMapping = in_array($role, ['developer', 'ao_remedial', 'superuser'])
     || hasPermission($perms, 'AO_REMEDIAL_BE')
     || hasPermission($perms, 'AO_KREDIT');
 
-$showProspek = true; // Semua bisa akses prospek (input prospek)
+$showMapping = (bool)($menu['can_access_mapping'] ?? $showMapping);
+$showProspek = (bool)($menu['can_access_prospek'] ?? false);
+$showHistory = (bool)($menu['can_access_history'] ?? true);
+$showProfile = (bool)($menu['can_access_profile'] ?? true);
 ?>
 
 <nav class="bottom-nav">
@@ -37,13 +41,17 @@ $showProspek = true; // Semua bisa akses prospek (input prospek)
     </a>
     <?php endif; ?>
 
+    <?php if ($showHistory): ?>
     <a href="<?= BASE_APP ?>/history" class="nav-item <?= ($current_page == 'history') ? 'active' : '' ?>">
         <i class="fa-solid fa-clock-rotate-left"></i>
         <span>History</span>
     </a>
+    <?php endif; ?>
 
+    <?php if ($showProfile): ?>
     <a href="<?= BASE_APP ?>/profile" class="nav-item <?= ($current_page == 'profile') ? 'active' : '' ?>">
         <i class="fa-solid fa-user"></i>
         <span>Profile</span>
     </a>
+    <?php endif; ?>
 </nav>

@@ -15,6 +15,63 @@ class Database
     private static ?PDO $dpkConn = null;
     private static ?PDO $simpegConn = null;
 
+    private static function connect(string $host, string $port, string $name, string $user, string $pass): PDO
+    {
+        $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+        return new PDO($dsn, $user, $pass, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
+        ]);
+    }
+
+    private static function isLocalRequest(): bool
+    {
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        return str_contains($host, 'localhost')
+            || str_contains($host, '127.0.0.1')
+            || str_contains($host, '::1');
+    }
+
+    private static function localCandidates(string $name): array
+    {
+        return [
+            ['localhost', '3306', $name, 'root', ''],
+            ['127.0.0.1', '3306', $name, 'root', ''],
+        ];
+    }
+
+    private static function connectWithFallback(string $label, string $host, string $port, string $name, string $user, string $pass): PDO
+    {
+        $errors = [];
+        $candidates = [[$host, $port, $name, $user, $pass]];
+
+        if (self::isLocalRequest()) {
+            foreach (self::localCandidates($name) as $candidate) {
+                if (!in_array($candidate, $candidates, true)) {
+                    $candidates[] = $candidate;
+                }
+            }
+        }
+
+        foreach ($candidates as [$tryHost, $tryPort, $tryName, $tryUser, $tryPass]) {
+            try {
+                return self::connect($tryHost, $tryPort, $tryName, $tryUser, $tryPass);
+            } catch (PDOException $e) {
+                $errors[] = $e->getCode() . ': ' . $e->getMessage();
+            }
+        }
+
+        $hint = self::isLocalRequest()
+            ? "Pastikan MySQL XAMPP aktif, database `{$name}` sudah dibuat, dan user `root` bisa login tanpa password."
+            : "Periksa host, port, nama database, user, dan password di file .env.";
+
+        sendResponse(500, "Koneksi database {$label} gagal. {$hint}", [
+            'last_error' => end($errors),
+        ]);
+    }
+
     /**
      * Get DPK database connection (prospek, kunjungan, mapping)
      */
@@ -27,18 +84,7 @@ class Database
             $user = env('DB_USER', 'root');
             $pass = env('DB_PASS', '');
 
-            $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-
-            try {
-                self::$dpkConn = new PDO($dsn, $user, $pass, [
-                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES   => false,
-                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
-                ]);
-            } catch (PDOException $e) {
-                sendResponse(500, 'Koneksi database DPK gagal: ' . $e->getMessage(), null);
-            }
+            self::$dpkConn = self::connectWithFallback('DPK', $host, $port, $name, $user, $pass);
         }
 
         return self::$dpkConn;
@@ -56,18 +102,7 @@ class Database
             $user = env('SIMPEG_DB_USER', env('DB_USER', 'root'));
             $pass = env('SIMPEG_DB_PASS', env('DB_PASS', ''));
 
-            $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-
-            try {
-                self::$simpegConn = new PDO($dsn, $user, $pass, [
-                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES   => false,
-                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
-                ]);
-            } catch (PDOException $e) {
-                sendResponse(500, 'Koneksi database SIMPEG gagal: ' . $e->getMessage(), null);
-            }
+            self::$simpegConn = self::connectWithFallback('SIMPEG', $host, $port, $name, $user, $pass);
         }
 
         return self::$simpegConn;
@@ -174,14 +209,23 @@ class Database
     {
         $db = self::getDpk();
 
-        $sql = "SELECT * FROM kode_kantor WHERE is_active = 1";
+        $columns = self::getTableColumns($db, 'kode_kantor');
+        $where = [];
         $params = [];
 
+        if (in_array('is_active', $columns, true)) {
+            $where[] = "is_active = 1";
+        }
+
         if ($korwil !== null && $korwil !== '' && $korwil !== 'all') {
-            $sql .= " AND korwil = :korwil";
+            $where[] = "korwil = :korwil";
             $params[':korwil'] = $korwil;
         }
 
+        $sql = "SELECT * FROM kode_kantor";
+        if (!empty($where)) {
+            $sql .= " WHERE " . implode(" AND ", $where);
+        }
         $sql .= " ORDER BY kode_kantor ASC";
 
         $stmt = $db->prepare($sql);
@@ -197,5 +241,15 @@ class Database
     {
         $list = self::getKodeKantor($korwil);
         return array_column($list, 'kode_kantor');
+    }
+
+    private static function getTableColumns(PDO $db, string $table): array
+    {
+        try {
+            $stmt = $db->query("SHOW COLUMNS FROM `{$table}`");
+            return array_column($stmt->fetchAll(), 'Field');
+        } catch (Throwable $e) {
+            return [];
+        }
     }
 }

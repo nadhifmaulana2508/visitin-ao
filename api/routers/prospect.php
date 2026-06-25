@@ -50,6 +50,24 @@ switch ($action) {
         (new ProspectController())->changeStatus(readJsonBody());
         break;
 
+    case 'prospect_confirm_credit_interest':
+        if ($request_method !== 'POST') sendResponse(405, 'Method harus POST', null);
+        $token = AuthMiddleware::require();
+        (new ProspectController())->confirmCreditInterest(readJsonBody());
+        break;
+
+    case 'prospect_complete_credit_docs':
+        if ($request_method !== 'POST') sendResponse(405, 'Method harus POST', null);
+        $token = AuthMiddleware::require();
+        (new ProspectController())->completeCreditDocumentation(readJsonBody());
+        break;
+
+    case 'prospect_credit_upload':
+        if ($request_method !== 'POST') sendResponse(405, 'Method harus POST', null);
+        $token = AuthMiddleware::require();
+        (new ProspectController())->uploadCreditPipelineFile(readJsonBody());
+        break;
+
     case 'prospect_close':
         if ($request_method !== 'POST') sendResponse(405, 'Method harus POST', null);
         $token = AuthMiddleware::require();

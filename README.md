@@ -83,7 +83,7 @@ php -S localhost:8080
 | Database | Nama | Fungsi |
 |----------|------|--------|
 | **DPK** | `dpk` | Data prospek, kunjungan, mapping, kode_kantor |
-| **SIMPEG** | `masq2971_simpeg_dummy` | Data pegawai aktif (read-only) |
+| **SIMPEG** | sesuai `.env` server | Data pegawai aktif existing (read-only) |
 
 ### Tabel di DB `dpk`
 
@@ -135,7 +135,7 @@ DB_PORT=3306
 SIMPEG_DB_HOST=localhost
 SIMPEG_DB_USER=root
 SIMPEG_DB_PASS=
-SIMPEG_DB_NAME=masq2971_simpeg_dummy
+SIMPEG_DB_NAME=simpeg
 SIMPEG_DB_PORT=3306
 
 # Cookie

@@ -1,0 +1,276 @@
+# Progres Pengembangan Visitin AO
+
+## 2026-06-24
+
+### Fokus Saat Ini
+- Modul prospek untuk semua karyawan.
+- Alur AO vs non-AO:
+  - AO Kredit input prospek kredit -> auto ke AO sendiri.
+  - AO Remedial input prospek aset -> auto ke AO sendiri.
+  - AO Dana input tabungan/deposito -> auto ke AO sendiri.
+  - AO Kredit input tabungan atau non-AO input prospek -> masuk pending delegasi Kepala Bidang Pemasaran cabang tujuan.
+- Pembatasan menu berdasarkan jabatan/cabang dengan tabel permission boolean per menu.
+- Pemisahan database:
+  - `dpk` untuk prospek/data kredit/corebank-like.
+  - `simpeg` untuk data pegawai.
+
+### Yang Sudah Dipelajari
+- Repo PHP native tanpa framework.
+- API utama ada di `api/index.php`, controller prospek di `api/controllers/ProspectController.php`.
+- UI prospek ada di `pages/input-prospek.php`, `pages/daftar-prospek.php`, dan `pages/prospek-detail.php`.
+- Kontrak lama belum sinkron: form dan SQL memakai `jenis_usaha/rekomendasi_produk/keterangan_usaha`, tetapi controller dan beberapa UI masih membaca `product_interest/estimated_amount`.
+- File SQL saat ini baru berisi tabel `prospects`, belum lengkap untuk `kode_kantor`, follow up, history, SLA, dan menu access.
+
+### Sudah Dikerjakan
+- Sinkronisasi input prospek dengan skema baru:
+  - Backend menerima `rekomendasi_produk` lalu memetakan otomatis ke `prospect_type`.
+  - UI list/detail membaca `rekomendasi_produk` dan `jenis_usaha`, bukan kolom lama.
+  - AO auto-assign hanya jika produk cocok dengan permission AO-nya.
+  - Produk yang tidak cocok dengan AO penginput masuk pending delegasi Kepala Bidang Pemasaran cabang tujuan.
+- Middleware API mengisi session dari Bearer token/cookie agar `created_by` tidak kosong saat request API langsung.
+- Endpoint delegasi dibatasi untuk Developer/Superuser Prospek.
+- Fix submit form prospek di localhost:
+  - API sekarang menerima session halaman sebagai fallback auth.
+  - Cookie auth otomatis mengabaikan domain production dan secure flag saat host localhost/127.0.0.1.
+- Fix akses database lokal:
+  - `.env` lokal diarahkan ke MySQL XAMPP (`localhost`, root tanpa password).
+  - Koneksi database punya fallback localhost/127.0.0.1 untuk request lokal.
+  - Error DB dibuat lebih informatif dan tidak langsung menampilkan credential lengkap di toast.
+  - `kode_kantor` dibuat kompatibel dengan skema lama yang belum punya `is_active`.
+  - Ditambahkan runner migration `database/run_migration_dpk.php`.
+- Form input prospek diperbaiki:
+  - Wilayah sekarang punya provinsi, kab/kota, kecamatan, dan desa/kelurahan.
+  - Dropdown cabang dan wilayah bisa diketik/search lewat datalist.
+  - Default provinsi diarahkan ke Jawa Tengah, tapi tetap bisa diganti.
+  - Layout form dibatasi maksimal di desktop dan tetap full nyaman di mobile.
+  - Warna form disamakan dengan tema dashboard (`var(--color-primary)`, `var(--color-secondary)`, `var(--color-accent)`).
+- SQL DPK dilengkapi:
+  - `kode_kantor`
+  - `menu_access_by_jabatan`
+  - `prospects`
+  - `prospect_follow_ups`
+  - `prospect_histories`
+  - `prospect_sla_logs`
+- Daftar tabel DPK dibuat di `database/TABEL_DPK_PROSPEK.md`.
+- SQL SIMPEG dummy dihapus karena SIMPEG existing sudah punya data pegawai.
+- README disesuaikan agar SIMPEG disebut sebagai database existing/read-only, bukan database dummy yang harus dibuat.
+- `api/.env` diselaraskan untuk dua database: `dpk` dan `simpeg`.
+- Flag akses menu global dibuat sejajar dengan kolom `menu_access_by_jabatan`, sementara masih berbasis role/permission dummy.
+
+### Verifikasi
+- `php -l` lolos untuk file PHP yang disentuh:
+  - `api/controllers/ProspectController.php`
+  - `api/controllers/AuthController.php`
+  - `api/middlewares/AuthMiddleware.php`
+  - `index.php`
+  - `views/header.php`
+  - `views/navbar.php`
+  - `pages/home.php`
+  - `pages/input-prospek.php`
+  - `pages/daftar-prospek.php`
+  - `pages/prospek-detail.php`
+- Catatan: PHP lokal menampilkan warning `Module "openssl" is already loaded`, tapi sintaks kode tetap valid.
+- Server lokal PHP berhasil start di `http://127.0.0.1:8087`.
+- Halaman `/login` merespons HTTP 200.
+- API `/api/?action=login` berhasil untuk dummy AO Kredit `201-001`.
+- API `master_kode_kantor` masih HTTP 500 di environment ini karena koneksi/migration database belum tersedia.
+- Simulasi login halaman lalu submit `prospect_create` sudah tidak kena 401.
+- Migration DPK berhasil dijalankan via `php database/run_migration_dpk.php`.
+- Submit `prospect_create` berhasil HTTP 201 setelah migration. Data test validasi sudah dihapus kembali.
+- Browser in-app tidak tersedia di sesi ini (`iab` tidak aktif), jadi verifikasi visual responsif belum bisa dilakukan.
+
+### Belum Dikerjakan
+- Eksekusi migration DB dari terminal, karena command `mysql` belum tersedia di PATH shell ini.
+- Test end-to-end semua role di browser.
+- Integrasi SIMPEG asli.
+- Menu selain prospek.
+
+## 2026-06-25
+
+### Sudah Dikerjakan
+- Dropdown wilayah form prospek diganti menjadi searchable dropdown/combobox:
+  - Cabang tujuan.
+  - Provinsi.
+  - Kab/Kota.
+  - Kecamatan.
+  - Desa/Kelurahan.
+- Dashboard home ditambah ringkasan prospek yang mengikuti scope user:
+  - Superuser pusat: konsolidasi semua cabang.
+  - Superuser cabang: semua prospek di cabangnya.
+  - AO: prospek assigned ke dia + input sendiri.
+  - Staff/karyawan: prospek input sendiri.
+- Ringkasan angka di home kemudian dihapus lagi agar home fokus sebagai akses menu.
+- Ringkasan statistik di daftar prospek sekarang mengambil `prospect_report`, bukan hanya menghitung item di halaman aktif.
+- Filter kantor di daftar prospek dikunci untuk user non-pusat agar tetap sesuai kantor user.
+- Scope report staff diperbaiki supaya staff hanya melihat prospek input sendiri.
+- Delegasi diperketat:
+  - Semua input prospek sekarang masuk `BELUM_DIDELEGASIKAN`.
+  - Superuser memilih AO sesuai jenis produk dan cabang.
+  - Kredit/Debitur Existing -> AO Kredit.
+  - Tabungan/Deposito -> AO Dana.
+  - Pembeli Aset -> AO Remedial.
+  - API delegasi memvalidasi AO tujuan harus sesuai group jabatan dan cabang prospek.
+- Query list/detail/SLA dibuat kompatibel dengan beda collation antara `prospects.kode_kantor` dan `kode_kantor.kode_kantor`.
+- Detail prospek diberi guard scope role agar user tidak bisa membuka prospek di luar aksesnya via URL langsung.
+- Default filter daftar prospek diperbaiki:
+  - Closing periode default tetap bulan lalu (`closing_from` awal bulan lalu, `closing_to` akhir bulan lalu).
+  - Data/list default menjadi data setelah `closing_to` sampai `harian_date`.
+  - Contoh: `closing_to = 2026-05-31`, maka data berjalan `2026-06-01 <= data <= 2026-06-25`.
+- Report `harian` diubah menjadi periode berjalan: `created_at > closing_to` dan `created_at <= harian_date`.
+- Hak delegasi diperketat:
+  - Developer bisa delegasi walaupun kode kantor `000`.
+  - Superuser cabang bisa delegasi jika kode kantor bukan `000`.
+  - Superuser pusat/kode kantor `000` tidak bisa delegasi.
+  - Tombol delegasi di detail mengikuti aturan tersebut.
+
+### Verifikasi
+- `php -l` lolos untuk:
+  - `api/controllers/ProspectController.php`
+  - `pages/input-prospek.php`
+  - `pages/home.php`
+  - `pages/daftar-prospek.php`
+- API `prospect_report` berhasil HTTP 200 untuk session superuser cabang.
+- API `prospect_list` berhasil HTTP 200 setelah fix collation join.
+- Test create prospek dari AO Kredit menghasilkan `BELUM_DIDELEGASIKAN`.
+- Data test validasi sudah dihapus kembali.
+- Halaman `/home` dan `/daftar-prospek` merespons HTTP 200.
+- API `prospect_report` dengan `closing_to=2026-05-31` dan `harian_date=2026-06-25` mengembalikan `harian.from=2026-06-01`.
+- API `prospect_list` dengan range default berjalan berhasil HTTP 200 dan mengambil data dari tabel `prospects`.
+- Setelah ringkasan angka home dihapus, `pages/home.php` tetap lolos `php -l` dan `/home` HTTP 200.
+- Filter daftar prospek disederhanakan menjadi 2 parameter:
+  - `closing_date`, default akhir bulan kemarin.
+  - `harian_date`, default tanggal hari ini.
+- Query list prospek diperbaiki agar memakai periode berjalan: `created_at > closing_date` dan `created_at <= harian_date`.
+- Duplikasi data daftar prospek diperbaiki dengan join `kode_kantor` yang dideduplikasi per `kode_kantor`, sehingga 4 data di tabel `prospects` tampil sebagai 4 item saja.
+- API `prospect_list` dengan `closing_date=2026-05-31` dan `harian_date=2026-06-25` berhasil HTTP 200 dengan `total=4`.
+- API `prospect_report` dengan parameter baru berhasil HTTP 200 dan mengembalikan:
+  - `closing_period.from=2026-05-01`
+  - `closing_period.to=2026-05-31`
+  - `harian.from=2026-06-01`
+  - `harian.date=2026-06-25`
+- Halaman `/daftar-prospek` berhasil HTTP 200 setelah perubahan filter.
+- Aturan auto-delegasi input prospek AO diperbarui:
+  - AO yang input prospek sesuai group AO-nya dan kode kantor prospek sama dengan kode kantor user otomatis `SUDAH_DIDELEGASIKAN` ke dirinya sendiri.
+  - Contoh: AO Kredit kode kantor `001` input prospek `KREDIT` untuk kantor `001` otomatis assigned ke AO tersebut.
+  - Jika AO input prospek beda cabang, tetap `BELUM_DIDELEGASIKAN`.
+  - Jika AO input produk yang bukan group AO-nya, tetap `BELUM_DIDELEGASIKAN` dan perlu delegasi superuser cabang.
+- Test API create sementara sebagai AO Kredit `201-001`:
+  - `KREDIT` kantor `001` -> `SUDAH_DIDELEGASIKAN`, `assigned_to=201-001`.
+  - `KREDIT` kantor `002` -> `BELUM_DIDELEGASIKAN`.
+  - `TABUNGAN` kantor `001` -> `BELUM_DIDELEGASIKAN`.
+  - Data test sudah dihapus kembali dari tabel `prospects` dan `prospect_histories`.
+- Desain dan implementasi awal pipeline/SLA kredit:
+  - SLA hanya untuk `KREDIT` dan `DEBITUR_EXISTING`.
+  - Pipeline kredit dibuat saat debitur konfirmasi berminat lanjut.
+  - SLA baru mulai dihitung saat `Pemberkasan Lengkap`.
+  - Tahapan pipeline kredit: `FORMULIR`, `PEMBERKASAN`, `SURVEY`, `ANALISA`, `KOMITE`, `CAIR`, lalu `SELESAI/BATAL`.
+  - Dokumen default kredit dibuat otomatis: formulir, KTP suami/istri, SKU/surat usaha, rekening listrik/air/pajak/sertifikat/NPWP, STNK/BPKB, sertifikat/collateral.
+- Tabel baru DPK ditambahkan:
+  - `prospect_credit_pipelines`
+  - `prospect_credit_pipeline_documents`
+  - `prospect_credit_pipeline_stages`
+- Kolom baru prospek ditambahkan:
+  - `closing_asset_purchase_method` untuk closing pembeli aset (`LELANG`, `CESSIE`, `LAINNYA`).
+- API baru ditambahkan:
+  - `prospect_confirm_credit_interest`
+  - `prospect_complete_credit_docs`
+- Endpoint `prospect_sla_log` diarahkan ke tabel pipeline kredit baru, tetap kompatibel dengan log SLA lama.
+- Closing prospek diperketat sesuai jenis:
+  - Kredit wajib nomor rekening dan nominal pencairan, serta sudah masuk SLA/pipeline.
+  - Tabungan/deposito wajib nomor rekening dan nominal setoran/deposito.
+  - Pembeli aset wajib nama pembeli dan metode pembelian (`LELANG`, `CESSIE`, `LAINNYA`).
+- Tampilan detail prospek diperbarui:
+  - Tombol `Debitur Mau Lanjut` untuk membuat pipeline kredit.
+  - Tombol `Pemberkasan Lengkap` untuk mulai hitung SLA.
+  - Tahapan SLA mengikuti alur kredit baru.
+  - Berkas kredit tampil sebagai checklist.
+  - Form closing berubah sesuai produk prospek.
+- Migration DPK berhasil dijalankan setelah penambahan tabel pipeline kredit.
+- Test API pipeline kredit sementara sebagai AO Kredit `201-001`:
+  - Create prospek kredit kantor `001` otomatis assigned ke `201-001`.
+  - Konfirmasi minat berhasil membuat pipeline.
+  - Pemberkasan lengkap berhasil mengubah status ke `SLA`.
+  - Tambah stage `SURVEY` berhasil.
+  - Detail mengembalikan pipeline dengan 6 dokumen dan 3 stage.
+  - Data test sudah dihapus kembali dari tabel terkait.
+- Halaman `/prospek-detail/6` berhasil HTTP 200 setelah perubahan.
+- Perbaikan UI dan upload SLA Kredit:
+  - Action tombol detail prospek dibuat grid ringkas agar proses SLA tidak terlalu panjang di layar.
+  - Foto prospek tampil sebagai icon/chip `Foto Prospek`, lalu preview dibuka lewat modal.
+  - Berkas kredit tampil sebagai checklist dengan tombol icon upload dan view.
+  - `FORMULIR` menerima upload foto/scan.
+  - Dokumen kredit selain formulir menerima upload PDF.
+  - Foto upload dari browser dikompres otomatis sebelum dikirim.
+  - Tahap SLA menyesuaikan form:
+    - `SURVEY` wajib upload foto kunjungan/jaminan.
+    - `ANALISA` wajib upload PDF hasil analisa.
+    - Tahap lain cukup catatan.
+  - Lampiran stage survey/analisa tampil sebagai icon, preview lewat modal.
+- Tabel pipeline kredit diperluas:
+  - `prospect_credit_pipeline_documents.file_type`
+  - `prospect_credit_pipeline_stages.attachment_url`
+  - `prospect_credit_pipeline_stages.attachment_type`
+- API `prospect_credit_upload` ditambahkan untuk upload dokumen pipeline kredit.
+- `Pemberkasan Lengkap` sekarang menolak mulai SLA jika masih ada dokumen wajib yang belum diupload.
+- Test API upload SLA sementara:
+  - Upload 1 foto formulir dan 5 PDF dokumen kredit berhasil HTTP 200.
+  - `Pemberkasan Lengkap` berhasil setelah semua dokumen upload.
+  - Stage `SURVEY` dengan foto berhasil dan attachment terbaca di detail.
+  - Data dan file test sudah dihapus kembali.
+- Verifikasi:
+  - `php -l` lolos untuk controller, router, halaman detail, dan migration.
+  - `/prospek-detail/6` HTTP 200.
+  - API `prospect_detail&id=6` HTTP 200.
+- Perbaikan lanjutan SLA Kredit:
+  - Berkas kredit dipindah menjadi sub `Pemberkasan` di dalam card Pipeline SLA, bukan card panjang terpisah.
+  - Card informasi nasabah, informasi proses, follow up, dan riwayat aktivitas dibuat buka-tutup agar halaman detail tidak terlalu panjang.
+  - Syarat mulai SLA diperlonggar sesuai proses:
+    - Wajib minimal `FORMULIR` dan `KTP_SUAMI_ISTRI`.
+    - Berkas lain boleh menyusul dan tetap bisa diupload dari sub `Pemberkasan`.
+  - Upload berkas susulan tidak lagi memenuhi timeline aktivitas satu per satu; hanya dokumen inti yang dicatat.
+  - Tahap SLA yang dipakai: `PEMBERKASAN -> SURVEY -> ANALISA -> KOMITE`.
+  - Tahap `CAIR` tidak lagi ditampilkan sebagai proses SLA; setelah komite lanjut closing jika sudah cair.
+  - Proses SLA tidak bisa lompat tahap:
+    - Dari pemberkasan hanya bisa ke `SURVEY`.
+    - Dari survey hanya bisa ke `ANALISA`.
+    - Dari analisa hanya bisa ke `KOMITE`.
+  - Modal tahap SLA tidak lagi memakai dropdown bebas, melainkan otomatis menampilkan tahap berikutnya.
+  - `SURVEY` tetap wajib upload foto.
+  - `ANALISA` dan `KOMITE` boleh upload PDF, tapi opsional.
+- Test API lanjutan:
+  - Upload hanya `FORMULIR` + `KTP_SUAMI_ISTRI` lalu `Pemberkasan Lengkap` berhasil HTTP 200.
+  - Coba lompat langsung ke `ANALISA` ditolak HTTP 400.
+  - Lanjut `SURVEY` dengan foto berhasil HTTP 200.
+  - Data dan file test sudah dihapus kembali.
+- `/prospek-detail/6` tetap HTTP 200 setelah perbaikan card collapsible.
+- Fix upload pemberkasan tidak muncul:
+  - Penyebab: sub `Pemberkasan` berada di dalam `sla-section`, sementara `sla-section` sebelumnya baru tampil setelah status sudah `SLA`.
+  - Perbaikan: Pipeline/Berkas Kredit sekarang tampil sejak `credit_pipeline` dibuat oleh tombol `Debitur Mau Lanjut`, walaupun status prospek masih `FOLLOW_UP`.
+  - Label tahap sebelum SLA dimulai menjadi `Menunggu pemberkasan`.
+  - Test API: setelah `Debitur Mau Lanjut`, detail prospek masih `FOLLOW_UP` tetapi sudah membawa `credit_pipeline` dengan 6 dokumen, sehingga upload pemberkasan bisa tampil.
+- Perbaikan detail prospek dan akses SLA:
+  - Warna hijau pada form/SLA summary, tombol SLA, icon checklist, dan tombol view diganti ke warna netral/biru agar konsisten.
+  - Urutan detail diperbaiki:
+    - Header prospek.
+    - `Informasi Nasabah` default open.
+    - `Pipeline SLA Kredit` default open jika pipeline sudah ada.
+    - Informasi lain default tertutup.
+  - Upload/re-upload dokumen pipeline:
+    - Jika belum pernah upload, tetap boleh upload.
+    - Setelah file diupload, masih bisa re-upload selama 7 hari.
+    - Setelah lewat 7 hari dari upload, backend menolak re-upload.
+  - Upload lampiran stage Analisa/Komite bisa susulan lewat icon upload di stage.
+  - Kolom `attachment_uploaded_at` ditambahkan ke `prospect_credit_pipeline_stages` untuk menghitung lock 7 hari lampiran stage.
+  - Update SLA dikunci hanya untuk AO pengelola prospek atau developer.
+  - Superuser pusat/cabang hanya bisa lihat; API update SLA tetap ditolak.
+- Test akses dan lock:
+  - Re-upload dokumen setelah `completed_at` dimundurkan 8 hari ditolak HTTP 400.
+  - Superuser cabang mencoba `prospect_confirm_credit_interest` ditolak HTTP 403.
+  - `/prospek-detail/6` tetap HTTP 200.
+
+### Belum Dikerjakan
+- Verifikasi visual browser penuh untuk combobox wilayah di semua device.
+- Verifikasi visual browser penuh untuk UI upload dan preview modal SLA Kredit, karena browser in-app tidak tersedia di sesi ini.
+- Penyempurnaan UI upload file per dokumen pipeline kredit.
+- Report khusus SLA kredit per stage dan overdue.
+- Integrasi role/jabatan dari SSO SIMPEG asli.

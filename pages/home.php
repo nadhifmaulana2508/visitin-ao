@@ -4,6 +4,7 @@ $nama_user = $user_name ?? 'User';
 $branch = $_SESSION['user_data']['branch'] ?? 'Cabang';
 $perms = $user_permissions ?? [];
 $kodeKantor = $user_kode_kantor ?? '000';
+$menu = $menu_access ?? [];
 
 $is_developer = ($role === 'developer');
 $is_superuser = in_array($role, ['superuser', 'developer']);
@@ -12,6 +13,13 @@ $is_ao_dana = in_array('AO_DANA', $perms) || $is_developer;
 $is_ao_remedial = (in_array('AO_REMEDIAL_FE', $perms) || in_array('AO_REMEDIAL_BE', $perms)) || $is_developer;
 $is_ao = $is_ao_kredit || $is_ao_dana || $is_ao_remedial;
 $is_pusat = ($kodeKantor === '000');
+
+$can_access_prospek = (bool)($menu['can_access_prospek'] ?? true);
+$can_input_prospek = (bool)($menu['can_input_prospek'] ?? true);
+$can_delegate_prospek = (bool)($menu['can_delegate_prospek'] ?? $is_superuser);
+$can_view_report_prospek = (bool)($menu['can_view_report_prospek'] ?? ($is_superuser || $is_pusat));
+$can_access_mapping = (bool)($menu['can_access_mapping'] ?? ($is_ao || $is_superuser));
+$can_access_nominatif = (bool)($menu['can_access_nominatif'] ?? ($is_ao || $is_superuser));
 ?>
 
 <style>
@@ -82,6 +90,7 @@ $is_pusat = ($kodeKantor === '000');
         border: 2px solid rgba(255,255,255,0.6); box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     @media (min-width: 768px) { .avatar-home { width: 50px; height: 50px; } }
+
 </style>
 
 
@@ -109,19 +118,21 @@ $is_pusat = ($kodeKantor === '000');
 
 <div class="content-padding pb-5 mb-4">
 
-    <!-- ============ MENU PROSPEK (Semua role bisa akses) ============ -->
+    <?php if ($can_access_prospek): ?>
     <h6 class="section-heading"><i class="fa-solid fa-bullseye me-2 text-accent"></i>Prospek</h6>
     <div class="grid-responsive mb-4">
+        <?php if ($can_input_prospek): ?>
         <a href="<?= BASE_APP ?>/input-prospek" class="menu-card">
             <div class="menu-icon-wrapper icon-green"><i class="fa-solid fa-plus"></i></div>
             <span class="menu-title">Input Prospek</span>
         </a>
+        <?php endif; ?>
         <a href="<?= BASE_APP ?>/daftar-prospek" class="menu-card">
             <div class="menu-icon-wrapper icon-blue"><i class="fa-solid fa-list-check"></i></div>
             <span class="menu-title">Daftar Prospek</span>
         </a>
 
-        <?php if ($is_superuser): ?>
+        <?php if ($can_delegate_prospek): ?>
         <a href="<?= BASE_APP ?>/daftar-prospek?filter=pending" class="menu-card">
             <div class="menu-icon-wrapper icon-purple"><i class="fa-solid fa-user-gear"></i></div>
             <span class="menu-title">Delegasi Prospek</span>
@@ -142,21 +153,22 @@ $is_pusat = ($kodeKantor === '000');
         </a>
         <?php endif; ?>
 
-        <?php if ($is_superuser || $is_pusat): ?>
+        <?php if ($can_view_report_prospek): ?>
         <a href="<?= BASE_APP ?>/daftar-prospek?view=report" class="menu-card">
             <div class="menu-icon-wrapper icon-blue"><i class="fa-solid fa-file-lines"></i></div>
             <span class="menu-title">Laporan Prospek</span>
         </a>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
 
 
     <!-- ============ MENU KUNJUNGAN & MAPPING (AO + Superuser) ============ -->
-    <?php if ($is_ao || $is_superuser): ?>
+    <?php if ($can_access_mapping || $can_access_nominatif): ?>
     <h6 class="section-heading"><i class="fa-solid fa-person-walking-arrow-right me-2 text-accent"></i>Kunjungan & Mapping</h6>
     <div class="grid-responsive mb-4">
 
-        <?php if ($is_ao_remedial): ?>
+        <?php if ($is_ao_remedial && $can_access_mapping): ?>
         <a href="<?= BASE_APP ?>/mapping" class="menu-card">
             <div class="menu-icon-wrapper icon-orange"><i class="fa-solid fa-calendar-check"></i></div>
             <span class="menu-title">Mapping Bulan Ini</span>
@@ -171,19 +183,21 @@ $is_pusat = ($kodeKantor === '000');
         </a>
         <?php endif; ?>
 
-        <?php if ($is_ao_kredit): ?>
+        <?php if ($is_ao_kredit && $can_access_mapping): ?>
         <a href="<?= BASE_APP ?>/mapping" class="menu-card">
             <div class="menu-icon-wrapper icon-orange"><i class="fa-solid fa-users-gear"></i></div>
             <span class="menu-title">Mapping Existing</span>
         </a>
         <?php endif; ?>
 
+        <?php if ($can_access_nominatif): ?>
         <a href="<?= BASE_APP ?>/nominatif" class="menu-card">
             <div class="menu-icon-wrapper icon-blue"><i class="fa-solid fa-file-invoice-dollar"></i></div>
             <span class="menu-title">Nominatif Kredit</span>
         </a>
+        <?php endif; ?>
 
-        <?php if ($is_superuser): ?>
+        <?php if ($is_superuser && $can_access_mapping): ?>
         <a href="<?= BASE_APP ?>/mapping" class="menu-card">
             <div class="menu-icon-wrapper icon-purple"><i class="fa-solid fa-chart-column"></i></div>
             <span class="menu-title">Monitoring Mapping</span>
@@ -204,10 +218,10 @@ $is_pusat = ($kodeKantor === '000');
             <div class="menu-icon-wrapper icon-green"><i class="fa-solid fa-file-lines"></i></div>
             <span class="menu-title">Report Prospek</span>
         </a>
-        <a href="<?= BASE_APP ?>/daftar-prospek?source=non_ao" class="menu-card">
+        <!-- <a href="<?= BASE_APP ?>/daftar-prospek?source=non_ao" class="menu-card">
             <div class="menu-icon-wrapper icon-orange"><i class="fa-solid fa-user-clock"></i></div>
             <span class="menu-title">Input Non-AO</span>
-        </a>
+        </a> -->
         <a href="<?= BASE_APP ?>/mapping" class="menu-card">
             <div class="menu-icon-wrapper icon-purple"><i class="fa-solid fa-ranking-star"></i></div>
             <span class="menu-title">Performa AO</span>

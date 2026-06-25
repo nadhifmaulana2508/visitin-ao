@@ -150,6 +150,8 @@ class AuthController
             'permissions' => $userData['permissions'],
             'branch' => $userData['branch_name'],
             'kode_kantor' => $userData['kode'] ?? '000',
+            'job_position' => $userData['job_position'] ?? '',
+            'group_jabatan' => $userData['group_jabatan'] ?? '',
             'iat' => time(),
             'exp' => time() + (14 * 24 * 60 * 60), // 14 hari
         ]));
@@ -225,6 +227,8 @@ class AuthController
             'permissions' => $user['data']['permissions'],
             'branch' => $user['data']['branch_name'],
             'kode_kantor' => $user['data']['kode'] ?? '000',
+            'job_position' => $user['data']['job_position'] ?? '',
+            'group_jabatan' => $user['data']['group_jabatan'] ?? '',
         ];
 
         // Response sesuai format yang diminta

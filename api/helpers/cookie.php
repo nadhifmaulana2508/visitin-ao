@@ -27,6 +27,12 @@ if (!function_exists('jwtExpiry')) {
 }
 
 if (!function_exists('setAuthCookie')) {
+    function isLocalHttpHost(): bool
+    {
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        return str_contains($host, 'localhost') || str_contains($host, '127.0.0.1') || str_contains($host, '::1');
+    }
+
     function setAuthCookie(string $token): void
     {
         $name   = env('COOKIE_NAME', 'sso_token');
@@ -38,6 +44,11 @@ if (!function_exists('setAuthCookie')) {
         $exp = jwtExpiry($token);
         if ($exp <= time()) {
             $exp = time() + (14 * 24 * 60 * 60); // fallback 14 hari
+        }
+
+        if (isLocalHttpHost()) {
+            $domain = '';
+            $secure = false;
         }
 
         $options = [
@@ -64,6 +75,11 @@ if (!function_exists('clearAuthCookie')) {
         $secure = env_bool('COOKIE_SECURE', false);
         $same   = env('COOKIE_SAMESITE', 'Lax');
         $path   = env('COOKIE_PATH', '/');
+
+        if (isLocalHttpHost()) {
+            $domain = '';
+            $secure = false;
+        }
 
         $options = [
             'expires'  => time() - 3600,

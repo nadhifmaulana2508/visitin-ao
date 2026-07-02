@@ -77,10 +77,13 @@ $prospect_id = $_GET['id'] ?? null;
     .photo-chip { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:10px; padding:7px 10px; background:#F1F5F9; color:#475569; font-size:0.68rem; font-weight:800; }
     .preview-frame { width:100%; min-height:420px; border:1px solid #E2E8F0; border-radius:12px; }
     .preview-img { width:100%; max-height:70vh; object-fit:contain; border-radius:12px; background:#F8FAFC; }
-    .pdf-mobile-preview { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:28px 18px; text-align:center; color:#475569; }
-    .pdf-mobile-preview i { font-size:2.5rem; color:#1565C0; margin-bottom:12px; }
-    .pdf-mobile-preview .title { font-size:0.85rem; font-weight:800; color:#1E293B; margin-bottom:4px; }
-    .pdf-mobile-preview .hint { font-size:0.68rem; margin-bottom:14px; }
+    .pdf-mobile-preview { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:14px; color:#475569; max-height:70vh; overflow:auto; }
+    .pdf-mobile-state { padding:34px 12px; text-align:center; }
+    .pdf-mobile-state i { font-size:2rem; color:#1565C0; margin-bottom:12px; }
+    .pdf-mobile-state .title { font-size:0.85rem; font-weight:800; color:#1E293B; margin-bottom:4px; }
+    .pdf-mobile-state .hint { font-size:0.68rem; margin-bottom:14px; }
+    .pdf-page-canvas { width:100%; height:auto; display:block; background:#fff; border-radius:8px; box-shadow:0 1px 5px rgba(15,23,42,.12); margin-bottom:12px; }
+    .pdf-page-canvas:last-child { margin-bottom:0; }
     .pdf-action-row { display:grid; grid-template-columns:1fr; gap:8px; }
     @media (min-width: 420px) { .pdf-action-row { grid-template-columns:repeat(2, minmax(0,1fr)); } }
     .collapse-card .section-title { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; margin-bottom:0; }
@@ -427,6 +430,7 @@ $prospect_id = $_GET['id'] ?? null;
     const isSuperuser = <?= $is_superuser ? 'true' : 'false' ?>;
     const canDelegateProspek = <?= $can_delegate_prospek ? 'true' : 'false' ?>;
     let prospectData = null;
+    let pdfJsLoadPromise = null;
 
     if (!prospectId) { showError('ID prospek tidak valid'); return; }
 
@@ -824,14 +828,13 @@ $prospect_id = $_GET['id'] ?? null;
             const safeTitle = escapeHtml(title || 'Berkas PDF');
             if (isMobilePdfViewer()) {
                 body.innerHTML = `<div class="pdf-mobile-preview">
-                    <i class="fa-solid fa-file-pdf"></i>
-                    <div class="title">${safeTitle}</div>
-                    <div class="hint">Preview PDF di browser mobile kadang tidak terbaca. Buka file langsung agar tampil penuh.</div>
-                    <div class="pdf-action-row">
-                        <a href="${safeUrl}" target="_blank" rel="noopener" class="action-btn btn-follow-up d-block text-center text-decoration-none mb-0"><i class="fa-solid fa-up-right-from-square me-2"></i>Buka PDF</a>
-                        <a href="${safeUrl}" download class="action-btn btn-wa d-block text-center text-decoration-none mb-0"><i class="fa-solid fa-download me-2"></i>Unduh PDF</a>
+                    <div class="pdf-mobile-state">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <div class="title">${safeTitle}</div>
+                        <div class="hint">Memuat PDF...</div>
                     </div>
                 </div>`;
+                renderPdfInModal(url, body.querySelector('.pdf-mobile-preview'), safeUrl, safeTitle);
             } else {
                 body.innerHTML = `<iframe class="preview-frame" src="${safeUrl}"></iframe><a href="${safeUrl}" target="_blank" rel="noopener" class="action-btn btn-follow-up d-block text-center text-decoration-none mt-3"><i class="fa-solid fa-up-right-from-square me-2"></i>Buka PDF</a>`;
             }
@@ -844,6 +847,64 @@ $prospect_id = $_GET['id'] ?? null;
     function isMobilePdfViewer() {
         return window.matchMedia('(max-width: 767px)').matches
             || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    }
+
+    async function loadPdfJs() {
+        if (window.pdfjsLib) {
+            return window.pdfjsLib;
+        }
+
+        if (!pdfJsLoadPromise) {
+            pdfJsLoadPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = BASE_APP + '/assets/vendor/pdfjs/pdf.min.js';
+                script.onload = () => {
+                    if (!window.pdfjsLib) {
+                        reject(new Error('PDF.js tidak tersedia'));
+                        return;
+                    }
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = BASE_APP + '/assets/vendor/pdfjs/pdf.worker.min.js';
+                    resolve(window.pdfjsLib);
+                };
+                script.onerror = () => reject(new Error('Gagal memuat PDF.js'));
+                document.head.appendChild(script);
+            });
+        }
+
+        return pdfJsLoadPromise;
+    }
+
+    async function renderPdfInModal(url, container, safeUrl, safeTitle) {
+        try {
+            const pdfjsLib = await loadPdfJs();
+            const pdf = await pdfjsLib.getDocument({ url }).promise;
+            container.innerHTML = '';
+
+            for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+                const page = await pdf.getPage(pageNumber);
+                const baseViewport = page.getViewport({ scale: 1 });
+                const width = Math.max(260, container.clientWidth - 4);
+                const scale = width / baseViewport.width;
+                const viewport = page.getViewport({ scale });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.className = 'pdf-page-canvas';
+                canvas.width = Math.floor(viewport.width);
+                canvas.height = Math.floor(viewport.height);
+                container.appendChild(canvas);
+                await page.render({ canvasContext: context, viewport }).promise;
+            }
+        } catch (error) {
+            container.innerHTML = `<div class="pdf-mobile-state">
+                <i class="fa-solid fa-file-circle-exclamation"></i>
+                <div class="title">${safeTitle}</div>
+                <div class="hint">PDF belum bisa dirender di modal. Silakan buka file langsung.</div>
+                <div class="pdf-action-row">
+                    <a href="${safeUrl}" target="_blank" rel="noopener" class="action-btn btn-follow-up d-block text-center text-decoration-none mb-0"><i class="fa-solid fa-up-right-from-square me-2"></i>Buka PDF</a>
+                    <a href="${safeUrl}" download class="action-btn btn-wa d-block text-center text-decoration-none mb-0"><i class="fa-solid fa-download me-2"></i>Unduh PDF</a>
+                </div>
+            </div>`;
+        }
     }
 
     function escapeHtml(value) {

@@ -90,7 +90,10 @@ $prospect_id = $_GET['id'] ?? null;
     .input-evidence-map { width:100%; height:180px; border:1px solid #E2E8F0; border-radius:12px; overflow:hidden; background:#F1F5F9; }
     .input-evidence-map iframe { width:100%; height:100%; border:0; display:block; }
     .input-evidence-meta { margin-top:8px; font-size:0.68rem; color:#64748B; line-height:1.45; }
-    .input-photo-thumb { width:82px; height:110px; border:1px solid #E2E8F0; border-radius:12px; padding:6px; background:#fff; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(15,23,42,.08); }
+    .input-evidence-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
+    @media (min-width: 768px) { .input-evidence-grid { grid-template-columns:1fr 1fr; } }
+    .input-evidence-grid .detail-card { margin-bottom:0; }
+    .input-photo-thumb { width:100%; height:180px; border:1px solid #E2E8F0; border-radius:12px; padding:6px; background:#fff; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(15,23,42,.08); }
     .input-photo-thumb img { width:100%; height:100%; object-fit:cover; border-radius:8px; display:block; }
     .collapse-card .section-title { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; margin-bottom:0; }
     .collapse-card .collapse-body { margin-top:12px; }
@@ -211,14 +214,14 @@ $prospect_id = $_GET['id'] ?? null;
         <div id="action-section"></div>
 
         <!-- Input Evidence -->
-        <div id="input-evidence-section" style="display:none;">
-            <div class="detail-card" id="input-location-section" style="display:none;">
-                <h6 class="section-title"><i class="fa-solid fa-location-dot me-2 text-accent"></i>Titik Lokasi</h6>
-                <div id="input-location-preview"></div>
-            </div>
+        <div class="input-evidence-grid" id="input-evidence-section" style="display:none;">
             <div class="detail-card" id="input-photo-section" style="display:none;">
                 <h6 class="section-title"><i class="fa-solid fa-image me-2 text-accent"></i>Foto / Dokumen</h6>
                 <div id="input-photo-preview"></div>
+            </div>
+            <div class="detail-card" id="input-location-section" style="display:none;">
+                <h6 class="section-title"><i class="fa-solid fa-location-dot me-2 text-accent"></i>Titik Lokasi</h6>
+                <div id="input-location-preview"></div>
             </div>
         </div>
     </div>

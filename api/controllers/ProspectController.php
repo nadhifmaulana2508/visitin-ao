@@ -172,7 +172,7 @@ class ProspectController
         ];
     }
 
-    private function saveBase64Upload(string $base64, string $mimeType, string $prefix, array $allowedMime): array
+    private function saveBase64Upload(string $base64, string $mimeType, string $prefix, array $allowedMime, string $folder = 'credit_pipeline'): array
     {
         if (!in_array($mimeType, $allowedMime, true)) {
             sendResponse(400, 'Tipe file tidak sesuai untuk proses ini', null);
@@ -192,7 +192,8 @@ class ProspectController
         };
 
         $safePrefix = preg_replace('/[^a-zA-Z0-9_-]/', '_', $prefix);
-        $uploadDir = __DIR__ . '/../../uploads/credit_pipeline/';
+        $safeFolder = preg_replace('/[^a-zA-Z0-9_-]/', '_', $folder);
+        $uploadDir = __DIR__ . "/../../uploads/{$safeFolder}/";
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
@@ -204,7 +205,7 @@ class ProspectController
         }
 
         return [
-            'path' => 'uploads/credit_pipeline/' . $filename,
+            'path' => "uploads/{$safeFolder}/" . $filename,
             'type' => str_starts_with($mimeType, 'image/') ? 'IMAGE' : 'PDF',
         ];
     }
@@ -490,6 +491,15 @@ class ProspectController
         $assignedTo = $canAutoDelegateToSelf ? $employeeId : null;
         $assignedBy = $canAutoDelegateToSelf ? $employeeId : null;
         $assignedAt = $canAutoDelegateToSelf ? date('Y-m-d H:i:s') : null;
+        $fotoUrl = $input['foto_url'] ?? null;
+        if (!$fotoUrl && !empty($input['foto_base64'])) {
+            $mimeType = 'image/jpeg';
+            if (preg_match('#^data:(image/(?:jpeg|png));base64,#i', (string)$input['foto_base64'], $matches)) {
+                $mimeType = strtolower($matches[1]);
+            }
+            $savedFoto = $this->saveBase64Upload((string)$input['foto_base64'], $mimeType, "prospect_{$employeeId}", ['image/jpeg', 'image/png'], 'prospects');
+            $fotoUrl = $savedFoto['path'];
+        }
 
         $stmt = $this->db->prepare("INSERT INTO prospects (
             prospect_type, customer_name, identity_number, phone_number,
@@ -521,7 +531,7 @@ class ProspectController
             ':lat' => $input['latitude'] ?? null,
             ':lng' => $input['longitude'] ?? null,
             ':geo_addr' => $input['geo_address'] ?? null,
-            ':foto' => $input['foto_url'] ?? null,
+            ':foto' => $fotoUrl,
             ':kode_kantor' => $kodeKantor,
             ':desc' => $input['description'] ?? null,
             ':created_by' => $employeeId,

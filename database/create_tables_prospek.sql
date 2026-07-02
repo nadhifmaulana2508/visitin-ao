@@ -10,47 +10,46 @@ CREATE DATABASE IF NOT EXISTS `dpk`
 USE `dpk`;
 
 CREATE TABLE IF NOT EXISTS `kode_kantor` (
-    `kode_kantor` VARCHAR(5) PRIMARY KEY,
-    `nama_kantor` VARCHAR(120) NOT NULL,
-    `korwil` ENUM('pusat','semarang','solo','banyumas','pekalongan') NOT NULL,
-    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `kode_kantor` VARCHAR(3) NOT NULL,
+    `nama_kantor` VARCHAR(100) NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_kode_kantor` (`kode_kantor`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-INSERT INTO `kode_kantor` (`kode_kantor`, `nama_kantor`, `korwil`) VALUES
-('000','Kantor Pusat','pusat'),
-('001','Kc. Utama','semarang'),
-('002','Kc. Rembang','semarang'),
-('003','Kc. Pati','semarang'),
-('004','Kc. Demak','semarang'),
-('005','Kc. Kendal','semarang'),
-('006','Kc. Salatiga','semarang'),
-('007','Kc. Kab. Semarang','semarang'),
-('008','Kc. Wonogiri','solo'),
-('009','Kc. Kota Surakarta','solo'),
-('010','Kc. Karanganyar','solo'),
-('011','Kc. Sukoharjo','solo'),
-('012','Kc. Sragen','solo'),
-('013','Kc. Boyolali','solo'),
-('014','Kc. Magelang','solo'),
-('015','Kc. Wonosobo','banyumas'),
-('016','Kc. Purworejo','banyumas'),
-('017','Kc. Kebumen','banyumas'),
-('018','Kc. Banjarnegara','banyumas'),
-('019','Kc. Purbalingga','banyumas'),
-('020','Kc. Banyumas','banyumas'),
-('021','Kc. Cilacap','banyumas'),
-('022','Kc. Kab. Tegal','pekalongan'),
-('023','Kc. Brebes','pekalongan'),
-('024','Kc. Kota Tegal','pekalongan'),
-('025','Kc. Pemalang','pekalongan'),
-('026','Kc. Kota Pekalongan','pekalongan'),
-('027','Kc. Kab. Pekalongan','pekalongan'),
-('028','Kc. Batang','pekalongan')
+INSERT INTO `kode_kantor` (`id`, `kode_kantor`, `nama_kantor`) VALUES
+(1, '001', 'Kc. Utama'),
+(2, '002', 'Kc. Rembang'),
+(3, '003', 'Kc. Pati'),
+(4, '004', 'Kc. Demak'),
+(5, '005', 'Kc. Kendal'),
+(6, '006', 'Kc. Salatiga'),
+(7, '007', 'Kc. Kab. Semarang'),
+(8, '008', 'Kc. Wonogiri'),
+(9, '009', 'Kc. Kota Surakarta'),
+(10, '010', 'Kc. Karanganyar'),
+(11, '011', 'Kc. Sukoharjo'),
+(12, '012', 'Kc. Sragen'),
+(13, '013', 'Kc. Boyolali'),
+(14, '014', 'Kc. Magelang'),
+(15, '015', 'Kc. Wonosobo'),
+(16, '016', 'Kc. Purworejo'),
+(17, '017', 'Kc. Kebumen'),
+(18, '018', 'Kc. Banjarnegara'),
+(19, '019', 'Kc. Purbalingga'),
+(20, '020', 'Kc. Banyumas'),
+(21, '021', 'Kc. Cilacap'),
+(22, '022', 'Kc. Kab. Tegal'),
+(23, '023', 'Kc. Brebes'),
+(24, '024', 'Kc. Kota Tegal'),
+(25, '025', 'Kc. Pemalang'),
+(26, '026', 'Kc. Kota Pekalongan'),
+(27, '027', 'Kc. Kab. Pekalongan'),
+(28, '028', 'Kc. Batang'),
+(29, '000', 'Pusat')
 ON DUPLICATE KEY UPDATE
-    `nama_kantor` = VALUES(`nama_kantor`),
-    `korwil` = VALUES(`korwil`),
-    `is_active` = 1;
+    `kode_kantor` = VALUES(`kode_kantor`),
+    `nama_kantor` = VALUES(`nama_kantor`);
 
 CREATE TABLE IF NOT EXISTS `menu_access_by_jabatan` (
     `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

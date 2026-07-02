@@ -217,9 +217,22 @@ class Database
             $where[] = "is_active = 1";
         }
 
-        if ($korwil !== null && $korwil !== '' && $korwil !== 'all') {
+        if ($korwil !== null && $korwil !== '' && $korwil !== 'all' && in_array('korwil', $columns, true)) {
             $where[] = "korwil = :korwil";
             $params[':korwil'] = $korwil;
+        } elseif ($korwil !== null && $korwil !== '' && $korwil !== 'all') {
+            $codes = self::getKodeKantorCodesByKorwilName($korwil);
+            if (!empty($codes)) {
+                $placeholders = [];
+                foreach ($codes as $i => $code) {
+                    $key = ":kode_{$i}";
+                    $placeholders[] = $key;
+                    $params[$key] = $code;
+                }
+                $where[] = "kode_kantor IN (" . implode(',', $placeholders) . ")";
+            } else {
+                $where[] = "1 = 0";
+            }
         }
 
         $sql = "SELECT * FROM kode_kantor";
@@ -241,6 +254,18 @@ class Database
     {
         $list = self::getKodeKantor($korwil);
         return array_column($list, 'kode_kantor');
+    }
+
+    public static function getKodeKantorCodesByKorwilName(string $korwil): array
+    {
+        return match (strtolower(trim($korwil))) {
+            'pusat' => ['000'],
+            'semarang' => ['001', '002', '003', '004', '005', '006', '007'],
+            'solo' => ['008', '009', '010', '011', '012', '013', '014'],
+            'banyumas' => ['015', '016', '017', '018', '019', '020', '021'],
+            'pekalongan' => ['022', '023', '024', '025', '026', '027', '028'],
+            default => [],
+        };
     }
 
     private static function getTableColumns(PDO $db, string $table): array

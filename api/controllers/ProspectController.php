@@ -54,11 +54,29 @@ class ProspectController
 
     private function kodeKantorJoinSql(string $alias = 'kk'): string
     {
+        $korwilSelect = $this->hasKodeKantorColumn('korwil') ? 'MIN(korwil) AS korwil' : 'NULL AS korwil';
+
         return "LEFT JOIN (
-                    SELECT kode_kantor, MIN(nama_kantor) AS nama_kantor, MIN(korwil) AS korwil
+                    SELECT kode_kantor, MIN(nama_kantor) AS nama_kantor, {$korwilSelect}
                     FROM kode_kantor
                     GROUP BY kode_kantor
                 ) {$alias} ON CONVERT(p.kode_kantor USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT({$alias}.kode_kantor USING utf8mb4) COLLATE utf8mb4_unicode_ci";
+    }
+
+    private function hasKodeKantorColumn(string $column): bool
+    {
+        static $columns = null;
+
+        if ($columns === null) {
+            try {
+                $stmt = $this->db->query("SHOW COLUMNS FROM `kode_kantor`");
+                $columns = array_column($stmt->fetchAll(), 'Field');
+            } catch (\Throwable $e) {
+                $columns = [];
+            }
+        }
+
+        return in_array($column, $columns, true);
     }
 
     /**
@@ -256,7 +274,11 @@ class ProspectController
 
         if ($role === 'superuser') {
             if (!empty($user['access_korwil'])) {
-                return ($prospect['korwil'] ?? '') === $user['access_korwil'];
+                if (!empty($prospect['korwil'])) {
+                    return ($prospect['korwil'] ?? '') === $user['access_korwil'];
+                }
+
+                return in_array((string)($prospect['kode_kantor'] ?? ''), Database::getKodeKantorCodesByKorwilName($user['access_korwil']), true);
             }
             return $kodeKantor === '000' || ($prospect['kode_kantor'] ?? '') === $kodeKantor;
         }
@@ -273,6 +295,7 @@ class ProspectController
         $userRole = $user['role'] ?? 'staff';
         $userPerms = $user['permissions'] ?? [];
         $userKodeKantor = $user['kode_kantor'] ?? '000';
+        $userAccessKorwil = $user['access_korwil'] ?? null;
         $isBranchDelegator = preg_match('/^(00[1-9]|0[1-2][0-9]|028)$/', (string)$userKodeKantor) === 1;
 
         return $userRole === 'developer'
@@ -557,8 +580,18 @@ class ProspectController
             // Full access, no filter
         } elseif ($userRole === 'superuser') {
             if ($userAccessKorwil) {
-                $sql .= " AND kk.korwil = :user_korwil";
-                $binds[':user_korwil'] = $userAccessKorwil;
+                $accessCodes = Database::getKodeKantorByKorwil($userAccessKorwil);
+                if (!empty($accessCodes)) {
+                    $placeholders = [];
+                    foreach ($accessCodes as $i => $code) {
+                        $key = ":access_korwil_{$i}";
+                        $placeholders[] = $key;
+                        $binds[$key] = $code;
+                    }
+                    $sql .= " AND p.kode_kantor IN (" . implode(',', $placeholders) . ")";
+                } else {
+                    $sql .= " AND 1=0";
+                }
             } elseif ($userKodeKantor === '000') {
                 // Pusat superuser: bisa lihat semua
             } else {

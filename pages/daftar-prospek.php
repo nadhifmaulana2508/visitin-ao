@@ -171,6 +171,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     <!-- Source tabs (AO / Non-AO / Pending) -->
     <div class="filter-tabs" id="source-tabs">
         <button class="ftab active" data-source="all">Semua</button>
+        <button class="ftab" data-source="mine">Prospek Saya</button>
         <button class="ftab" data-source="ao">Dari AO</button>
         <button class="ftab" data-source="non_ao">Dari Non-AO</button>
         <?php if ($is_superuser): ?>
@@ -379,7 +380,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
         }
     }
     fKorwil.addEventListener('change', renderCabangFilter);
-    loadCabangFilter();
+    const cabangReady = loadCabangFilter();
 
     // =========================================
     // VIEW SWITCH
@@ -397,6 +398,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     // LOAD DATA (List)
     // =========================================
     window.loadData = async function() {
+        const advancedOpen = document.getElementById('advanced-filter').open;
         const params = new URLSearchParams({
             source: currentSource === 'pending' ? 'all' : currentSource,
             search: document.getElementById('f-search').value,
@@ -404,11 +406,13 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             status: document.getElementById('f-status').value,
             korwil: fKorwil.value,
             kode_kantor: fCabang.value,
-            closing_date: document.getElementById('f-closing-date').value,
-            harian_date: document.getElementById('f-harian-date').value,
             page: currentPage,
             limit: 20,
         });
+        if (advancedOpen) {
+            params.set('closing_date', document.getElementById('f-closing-date').value);
+            params.set('harian_date', document.getElementById('f-harian-date').value);
+        }
         if (currentSource === 'pending') params.set('delegation', 'BELUM_DIDELEGASIKAN');
 
         try {
@@ -740,6 +744,6 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     // =========================================
     // INIT
     // =========================================
-    loadData();
+    cabangReady.then(loadData);
 })();
 </script>

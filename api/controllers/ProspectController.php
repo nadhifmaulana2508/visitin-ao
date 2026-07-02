@@ -297,6 +297,7 @@ class ProspectController
         $userPerms = $user['permissions'] ?? [];
         $userKodeKantor = $user['kode_kantor'] ?? '000';
         $userAccessKorwil = $user['access_korwil'] ?? null;
+        $userAccessKorwil = $user['access_korwil'] ?? null;
         $isBranchDelegator = preg_match('/^(00[1-9]|0[1-2][0-9]|028)$/', (string)$userKodeKantor) === 1;
 
         return $userRole === 'developer'
@@ -662,11 +663,14 @@ class ProspectController
         }
 
         // --- FILTER: AO vs Non-AO (is_ao_input) ---
-        $filterSource = $params['source'] ?? null; // 'ao', 'non_ao', 'all'
+        $filterSource = $params['source'] ?? null; // 'ao', 'non_ao', 'mine', 'all'
         if ($filterSource === 'ao') {
             $sql .= " AND p.is_ao_input = 1";
         } elseif ($filterSource === 'non_ao') {
             $sql .= " AND p.is_ao_input = 0";
+        } elseif ($filterSource === 'mine') {
+            $sql .= " AND p.created_by = :source_created_by";
+            $binds[':source_created_by'] = $user['employee_id'] ?? '';
         }
 
         // --- FILTER: Periode berjalan (created_at > closing_date dan <= harian_date) ---
@@ -1674,6 +1678,10 @@ class ProspectController
         $source = $params['source'] ?? 'all';
         if ($source === 'ao') $sourceWhere = " AND p.is_ao_input = 1";
         elseif ($source === 'non_ao') $sourceWhere = " AND p.is_ao_input = 0";
+        elseif ($source === 'mine') {
+            $sourceWhere = " AND p.created_by = :source_created_by";
+            $binds[':source_created_by'] = $user['employee_id'] ?? '';
+        }
 
         $where = "WHERE 1=1" . $accessWhere . $kantorWhere . $sourceWhere;
 

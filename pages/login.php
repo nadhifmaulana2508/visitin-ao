@@ -240,6 +240,7 @@
                 </div>
 
                 <form id="form-login" method="POST" action="<?= BASE_APP ?>/login">
+                    <input type="hidden" name="app" value="ims">
                     <div class="mb-3">
                         <label class="form-label" style="font-size:0.75rem; font-weight:700; color:#64748B;">ID Pegawai</label>
                         <input type="text" name="id_peg" id="input_id_peg" class="form-control-login" placeholder="Contoh: 102-119" required autofocus>
@@ -259,31 +260,39 @@
                 <summary><i class="fa-solid fa-flask me-1"></i> Akun Demo (Development)</summary>
                 <div class="mt-2">
                     <div class="demo-row">
-                        <div><span class="demo-role">Developer</span> <span class="demo-id ms-2">102-119</span></div>
-                        <button class="btn-demo" onclick="fillLogin('102-119')">Isi</button>
+                        <div><span class="demo-role">Admin</span> <span class="demo-id ms-2">102-119</span></div>
+                        <button class="btn-demo" onclick="fillLogin('102-119', '123456')">Isi</button>
                     </div>
                     <div class="demo-row">
-                        <div><span class="demo-role">AO Kredit</span> <span class="demo-id ms-2">201-001</span></div>
-                        <button class="btn-demo" onclick="fillLogin('201-001')">Isi</button>
+                        <div><span class="demo-role">User Non Pusat</span> <span class="demo-id ms-2">102-118</span></div>
+                        <button class="btn-demo" onclick="fillLogin('102-118')">Isi</button>
                     </div>
                     <div class="demo-row">
-                        <div><span class="demo-role">AO Dana</span> <span class="demo-id ms-2">201-002</span></div>
-                        <button class="btn-demo" onclick="fillLogin('201-002')">Isi</button>
+                        <div><span class="demo-role">Superuser Cabang</span> <span class="demo-id ms-2">113-008</span></div>
+                        <button class="btn-demo" onclick="fillLogin('113-008')">Isi</button>
                     </div>
                     <div class="demo-row">
-                        <div><span class="demo-role">AO Remedial</span> <span class="demo-id ms-2">201-003</span></div>
-                        <button class="btn-demo" onclick="fillLogin('201-003')">Isi</button>
+                        <div><span class="demo-role">AO Remedial</span> <span class="demo-id ms-2">111-027</span></div>
+                        <button class="btn-demo" onclick="fillLogin('111-027')">Isi</button>
                     </div>
                     <div class="demo-row">
-                        <div><span class="demo-role">Superuser</span> <span class="demo-id ms-2">201-004</span></div>
-                        <button class="btn-demo" onclick="fillLogin('201-004')">Isi</button>
+                        <div><span class="demo-role">AO Kredit</span> <span class="demo-id ms-2">111-028</span></div>
+                        <button class="btn-demo" onclick="fillLogin('111-028')">Isi</button>
                     </div>
                     <div class="demo-row">
-                        <div><span class="demo-role">Staff</span> <span class="demo-id ms-2">201-005</span></div>
-                        <button class="btn-demo" onclick="fillLogin('201-005')">Isi</button>
+                        <div><span class="demo-role">AO Dana</span> <span class="demo-id ms-2">111-007</span></div>
+                        <button class="btn-demo" onclick="fillLogin('111-007')">Isi</button>
+                    </div>
+                    <div class="demo-row">
+                        <div><span class="demo-role">User Non AO Cabang</span> <span class="demo-id ms-2">111-026</span></div>
+                        <button class="btn-demo" onclick="fillLogin('111-026')">Isi</button>
+                    </div>
+                    <div class="demo-row">
+                        <div><span class="demo-role">Superuser Pusat</span> <span class="demo-id ms-2">102-081</span></div>
+                        <button class="btn-demo" onclick="fillLogin('102-081')">Isi</button>
                     </div>
                 </div>
-                <p class="text-center mt-2 mb-0" style="font-size:0.55rem; opacity:0.5; color:#64748B;">Password: <b>123456</b></p>
+                <p class="text-center mt-2 mb-0" style="font-size:0.55rem; opacity:0.5; color:#64748B;">Password mengikuti tombol demo</p>
             </details>
 
             <p class="text-center mt-3 mb-0" style="font-size:0.65rem; color:#94A3B8;">&copy; 2026 IT Department - BKK Jateng</p>
@@ -312,8 +321,8 @@ function goSlide(n) {
     if (dots[n-1]) dots[n-1].classList.add('active');
 }
 
-function fillLogin(idPeg) {
+function fillLogin(idPeg, password = 'bkkjtg123') {
     document.getElementById('input_id_peg').value = idPeg;
-    document.getElementById('input_password').value = '123456';
+    document.getElementById('input_password').value = password;
 }
 </script>

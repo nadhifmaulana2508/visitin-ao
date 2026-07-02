@@ -18,26 +18,18 @@ class AuthMiddleware
             return;
         }
 
-        $payload = json_decode(base64_decode($parts[1]), true);
-        if (!$payload || empty($payload['sub'])) {
+        $payload = AuthController::decodeJwtPayload($token);
+        $employeeId = $payload['id_peg'] ?? $payload['sub'] ?? null;
+        if (!$payload || empty($employeeId)) {
             return;
         }
 
-        if (isset($payload['exp']) && $payload['exp'] < time()) {
+        $sessionUser = AuthController::buildSessionUser($token, AuthController::fetchSsoUser($token));
+        if (!$sessionUser) {
             return;
         }
 
-        $_SESSION['user_data'] = [
-            'token' => $token,
-            'employee_id' => $payload['sub'],
-            'full_name' => $payload['name'] ?? '',
-            'role' => $payload['role'] ?? 'staff',
-            'permissions' => $payload['permissions'] ?? [],
-            'branch' => $payload['branch'] ?? '',
-            'kode_kantor' => $payload['kode_kantor'] ?? '000',
-            'job_position' => $payload['job_position'] ?? '',
-            'group_jabatan' => $payload['group_jabatan'] ?? '',
-        ];
+        $_SESSION['user_data'] = $sessionUser;
     }
 
     public static function getToken(): ?string

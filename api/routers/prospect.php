@@ -38,6 +38,18 @@ switch ($action) {
         (new ProspectController())->delegate(readJsonBody());
         break;
 
+    case 'prospect_delegate_bulk':
+        if ($request_method !== 'POST') sendResponse(405, 'Method harus POST', null);
+        $token = AuthMiddleware::require();
+        (new ProspectController())->delegateBulk(readJsonBody());
+        break;
+
+    case 'prospect_ao_workload':
+        if ($request_method !== 'GET') sendResponse(405, 'Method harus GET', null);
+        $token = AuthMiddleware::require();
+        (new ProspectController())->aoWorkload($_GET);
+        break;
+
     case 'prospect_follow_up':
         if ($request_method !== 'POST') sendResponse(405, 'Method harus POST', null);
         $token = AuthMiddleware::require();

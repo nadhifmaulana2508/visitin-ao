@@ -196,6 +196,7 @@ CREATE TABLE IF NOT EXISTS `prospect_credit_pipelines` (
     `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `prospect_id` BIGINT UNSIGNED NOT NULL,
     `assigned_to` VARCHAR(20) DEFAULT NULL,
+    `requested_loan_amount` BIGINT UNSIGNED DEFAULT NULL,
     `confirmation_at` DATETIME NOT NULL,
     `documents_completed_at` DATETIME DEFAULT NULL,
     `sla_started_at` DATETIME DEFAULT NULL,

@@ -1,7 +1,7 @@
 <?php
 $is_ao = in_array($user_role, ['ao_kredit', 'ao_dana', 'ao_remedial', 'developer']);
 $is_superuser = in_array($user_role, ['superuser', 'developer']);
-$can_delegate_prospek = ($user_role === 'developer') || ($user_role === 'superuser' && $user_kode_kantor !== '000');
+$can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 $user_employee_id = $_SESSION['user_data']['employee_id'] ?? '';
 $prospect_id = $_GET['id'] ?? null;
 ?>
@@ -54,9 +54,9 @@ $prospect_id = $_GET['id'] ?? null;
     .btn-delegasi { background:var(--color-primary); color:white; box-shadow:0 4px 12px rgba(10,25,49,0.2); }
     .btn-wa { background:#F1F5F9; color:#334155; }
     .action-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
-    .action-grid .action-btn { margin-bottom:0; padding:11px 8px; font-size:0.72rem; min-height:48px; }
-    .action-grid .action-btn i { display:block; font-size:0.95rem; margin:0 0 3px 0 !important; }
-    @media (min-width: 768px) { .action-grid { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+    .action-grid .action-btn { margin-bottom:0; padding:10px 8px; font-size:0.72rem; min-height:44px; display:flex !important; align-items:center; justify-content:center; gap:6px; }
+    .action-grid .action-btn i { font-size:0.82rem; margin:0 !important; }
+    @media (min-width: 768px) { .action-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
 
     .sla-summary {
         background:#ffffff; border-radius:12px;
@@ -126,6 +126,7 @@ $prospect_id = $_GET['id'] ?? null;
                 <div class="info-row"><span class="info-label">No. HP</span><span class="info-value" id="d-phone">-</span></div>
                 <div class="info-row"><span class="info-label">No. Identitas</span><span class="info-value" id="d-identity">-</span></div>
                 <div class="info-row"><span class="info-label">Jenis Usaha</span><span class="info-value text-accent" id="d-jenis-usaha">-</span></div>
+                <div class="info-row"><span class="info-label">Produk</span><span class="info-value" id="d-product-detail">-</span></div>
                 <div class="info-row"><span class="info-label">Cabang</span><span class="info-value" id="d-cabang">-</span></div>
                 <div class="info-row"><span class="info-label">Alamat</span><span class="info-value" id="d-alamat" style="font-size:0.75rem;">-</span></div>
             </div>
@@ -225,6 +226,32 @@ $prospect_id = $_GET['id'] ?? null;
                         <input type="text" class="input-custom" name="next_plan" placeholder="Rencana tindak lanjut">
                     </div>
                     <button type="submit" class="action-btn btn-closing">Simpan Follow Up</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Debitur Mau Lanjut -->
+<div class="modal fade" id="modalCreditInterest" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="margin:15px; max-width:500px;">
+        <div class="modal-content" style="border-radius:16px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-handshake text-primary me-2"></i>Debitur Mau Lanjut</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-credit-interest">
+                    <div class="mb-3">
+                        <label class="form-label-custom">Plafon yang Akan Dipinjam <span class="text-danger">*</span></label>
+                        <input type="text" class="input-custom" name="requested_loan_amount" inputmode="numeric" placeholder="Contoh: 5.000.000" required>
+                        <small class="text-muted d-block mt-1" style="font-size:0.65rem;">Nominal otomatis diformat saat diketik.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-custom">Catatan</label>
+                        <textarea class="input-custom" name="note" rows="2" placeholder="Catatan awal pengajuan kredit..."></textarea>
+                    </div>
+                    <button type="submit" class="action-btn btn-sla">Konfirmasi Lanjut</button>
                 </form>
             </div>
         </div>
@@ -430,6 +457,34 @@ $prospect_id = $_GET['id'] ?? null;
         return new Date() <= limit;
     }
 
+    function digitsOnly(value) {
+        return String(value || '').replace(/\D/g, '');
+    }
+
+    function formatPlainNumber(value) {
+        const digits = digitsOnly(value);
+        return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
+    }
+
+    function formatEmployee(id, name) {
+        if (name && id) return `${name} (${id})`;
+        return name || id || '-';
+    }
+
+    function getProductLabel(p) {
+        const typeLabels = {
+            KREDIT: 'Kredit',
+            TABUNGAN: 'Tabungan',
+            DEPOSITO: 'Deposito',
+            PEMBELI_ASET: 'Pembeli Aset',
+            DEBITUR_EXISTING: 'Debitur Existing'
+        };
+        const type = typeLabels[p.prospect_type] || p.prospect_type || '';
+        const product = p.rekomendasi_produk || '';
+        if (product && type && product.toLowerCase() !== type.toLowerCase()) return `${product} - ${type}`;
+        return product || type || '-';
+    }
+
     window.toggleCollapse = function(titleEl) {
         titleEl.closest('.collapse-card')?.classList.toggle('collapsed');
     };
@@ -454,7 +509,7 @@ $prospect_id = $_GET['id'] ?? null;
         document.getElementById('d-status-badge').textContent = si.l;
 
         document.getElementById('d-name').textContent = p.customer_name;
-        document.getElementById('d-product').innerHTML = '<i class="fa-solid fa-box-open me-1"></i>' + (p.rekomendasi_produk || '-');
+        document.getElementById('d-product').innerHTML = '<i class="fa-solid fa-box-open me-1"></i>' + getProductLabel(p);
         const photoChip = document.getElementById('prospect-photo-chip');
         if (p.foto_url) {
             photoChip.style.display = 'block';
@@ -468,13 +523,14 @@ $prospect_id = $_GET['id'] ?? null;
         document.getElementById('d-phone').innerHTML = p.phone_number ? `<a href="tel:${p.phone_number}" style="color:inherit;text-decoration:none;">${p.phone_number}</a>` : '-';
         document.getElementById('d-identity').textContent = p.identity_number || '-';
         document.getElementById('d-jenis-usaha').textContent = p.jenis_usaha || '-';
+        document.getElementById('d-product-detail').textContent = getProductLabel(p);
         document.getElementById('d-cabang').textContent = (p.kode_kantor||'') + (p.nama_kantor ? ' - '+p.nama_kantor : '');
         document.getElementById('d-alamat').textContent = [p.address, p.desa, p.kecamatan, p.kab_kota].filter(Boolean).join(', ') || '-';
-        document.getElementById('d-created-by').textContent = p.created_by || '-';
+        document.getElementById('d-created-by').textContent = formatEmployee(p.created_by, p.created_by_name);
         document.getElementById('d-created-at').textContent = p.created_at ? fmtDateTime(p.created_at) : '-';
         document.getElementById('d-source').textContent = p.is_ao_input == 1 ? 'Input AO (Auto-delegasi)' : 'Input Non-AO';
         document.getElementById('d-delegasi').innerHTML = p.delegation_status === 'SUDAH_DIDELEGASIKAN' ? '<span style="color:#2E7D32;">Sudah</span>' : '<span style="color:#E65100;">Belum</span>';
-        document.getElementById('d-ao').textContent = p.assigned_to || 'Belum ditentukan';
+        document.getElementById('d-ao').textContent = p.assigned_to ? formatEmployee(p.assigned_to, p.assigned_to_name) : 'Belum ditentukan';
         document.getElementById('d-desc').textContent = p.description || p.keterangan_usaha || 'Tidak ada keterangan';
 
         renderCreditDocs(p.credit_pipeline || null);
@@ -485,7 +541,8 @@ $prospect_id = $_GET['id'] ?? null;
             document.getElementById('sla-days').textContent = p.sla_duration_days ?? 0;
             renderSlaStages(p.credit_pipeline?.stages || p.sla_logs || []);
             if (!(p.sla_started_at || p.credit_pipeline?.sla_started_at)) {
-                document.getElementById('sla-current-stage').textContent = 'Menunggu pemberkasan';
+                const plafon = p.credit_pipeline?.requested_loan_amount ? ' - Plafon ' + fmtRupiah(p.credit_pipeline.requested_loan_amount) : '';
+                document.getElementById('sla-current-stage').textContent = 'Menunggu pemberkasan' + plafon;
             }
         } else {
             document.getElementById('sla-section').style.display = 'none';
@@ -636,7 +693,7 @@ $prospect_id = $_GET['id'] ?? null;
             html += `<button class="action-btn btn-follow-up" data-bs-toggle="modal" data-bs-target="#modalFollowUp"><i class="fa-solid fa-phone-volume me-2"></i>Input Follow Up</button>`;
 
             if (isCredit && !hasCreditPipeline) {
-                html += `<button class="action-btn btn-sla" onclick="confirmCreditInterest()"><i class="fa-solid fa-handshake me-2"></i>Debitur Mau Lanjut</button>`;
+                html += `<button class="action-btn btn-sla" data-bs-toggle="modal" data-bs-target="#modalCreditInterest"><i class="fa-solid fa-handshake me-2"></i>Debitur Mau Lanjut</button>`;
             }
 
             if (isCredit && hasCreditPipeline && !docsComplete) {
@@ -680,15 +737,29 @@ $prospect_id = $_GET['id'] ?? null;
         } catch(e) { showToast('Error koneksi','danger'); }
     };
 
-    window.confirmCreditInterest = async function() {
-        if (!confirm('Debitur konfirmasi mau lanjut proses kredit?')) return;
+    document.getElementById('form-credit-interest').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const fd = new FormData(this);
+        const payload = {
+            prospect_id: prospectId,
+            requested_loan_amount: parseInt(digitsOnly(fd.get('requested_loan_amount')) || '0'),
+            note: fd.get('note')
+        };
+        if (!payload.requested_loan_amount || payload.requested_loan_amount <= 0) {
+            showToast('Plafon pinjaman wajib diisi', 'danger');
+            return;
+        }
         try {
-            const res = await fetch(BASE_APP+'/api/?action=prospect_confirm_credit_interest', {method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({prospect_id:prospectId})});
+            const res = await fetch(BASE_APP+'/api/?action=prospect_confirm_credit_interest', {method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
             const b = await res.json();
-            if (b.status===200) { showToast('<i class="fa-solid fa-check me-2"></i>'+b.message,'success'); setTimeout(()=>location.reload(),800); }
+            if (b.status===200) { showToast('<i class="fa-solid fa-check me-2"></i>'+b.message,'success'); bootstrap.Modal.getInstance(document.getElementById('modalCreditInterest')).hide(); setTimeout(()=>location.reload(),800); }
             else showToast(b.message||'Gagal','danger');
         } catch(e) { showToast('Error koneksi','danger'); }
-    };
+    });
+
+    document.querySelector('#form-credit-interest [name="requested_loan_amount"]').addEventListener('input', function() {
+        this.value = formatPlainNumber(this.value);
+    });
 
     window.completeCreditDocs = async function() {
         if (!confirm('Tandai pemberkasan sudah lengkap dan mulai hitung SLA?')) return;
@@ -920,18 +991,23 @@ $prospect_id = $_GET['id'] ?? null;
         const sel = document.getElementById('sel-ao-delegasi');
         const hint = document.getElementById('delegasi-hint');
         let group = '';
-        if (type==='KREDIT'||type==='DEBITUR_EXISTING') { group='AO Kredit'; hint.textContent='Hanya AO Kredit'; }
-        else if (type==='TABUNGAN'||type==='DEPOSITO') { group='AO Dana'; hint.textContent='Hanya AO Dana'; }
-        else if (type==='PEMBELI_ASET') { group='AO Remedial'; hint.textContent='Hanya AO Remedial'; }
+        let tipe = '';
+        if (type==='KREDIT'||type==='DEBITUR_EXISTING') { group='AO Kredit'; tipe='kredit'; hint.textContent='Hanya AO Kredit'; }
+        else if (type==='TABUNGAN'||type==='DEPOSITO') { group='AO Dana'; tipe='dana'; hint.textContent='Hanya AO Dana'; }
+        else if (type==='PEMBELI_ASET') { group='AO Remedial'; tipe='remedial'; hint.textContent='Hanya AO Remedial'; }
         try {
             const params = new URLSearchParams();
             if (group) params.set('group_jabatan', group);
+            if (tipe) params.set('tipe', tipe);
             if (prospectData && prospectData.kode_kantor) params.set('kode_kantor', prospectData.kode_kantor);
             const res = await fetch(BASE_APP+'/api/?action=master_pegawai_ao&'+params.toString(), {credentials:'include'});
             const b = await res.json();
             if (b.status===200 && Array.isArray(b.data)) {
                 sel.innerHTML = '<option value="">-- Pilih AO --</option>';
                 b.data.forEach(ao => { sel.innerHTML += `<option value="${ao.employee_id}">${ao.full_name} (${ao.job_position||ao.group_jabatan})</option>`; });
+                if (b.data.length === 0) {
+                    sel.innerHTML = '<option value="">-- AO tidak ditemukan di cabang ini --</option>';
+                }
             }
         } catch(e) {}
     }
@@ -939,6 +1015,7 @@ $prospect_id = $_GET['id'] ?? null;
     // Helpers
     function fmtDate(d) { if(!d) return '-'; return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}); }
     function fmtDateTime(d) { if(!d) return '-'; return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+    function fmtRupiah(n) { return new Intl.NumberFormat('id-ID', {style:'currency', currency:'IDR', maximumFractionDigits:0}).format(Number(n || 0)); }
 
     // Init
     loadDetail();

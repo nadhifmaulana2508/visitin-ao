@@ -15,6 +15,23 @@ class ProspectController
         $this->db = Database::getDpk();
     }
 
+    private function ensureColumnExists(string $table, string $column, string $definition): void
+    {
+        static $checked = [];
+        $key = "{$table}.{$column}";
+        if (isset($checked[$key])) {
+            return;
+        }
+
+        $stmt = $this->db->prepare("SHOW COLUMNS FROM `{$table}` LIKE :column");
+        $stmt->execute([':column' => $column]);
+        if (!$stmt->fetch()) {
+            $this->db->exec("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+        }
+
+        $checked[$key] = true;
+    }
+
     private function kodeKantorJoinSql(string $alias = 'kk'): string
     {
         return "LEFT JOIN (
@@ -65,6 +82,16 @@ class ProspectController
         };
     }
 
+    private function getSsoAoTypeForGroup(?string $groupJabatan): ?string
+    {
+        return match ($groupJabatan) {
+            'AO Kredit' => 'kredit',
+            'AO Dana' => 'dana',
+            'AO Remedial' => 'remedial',
+            default => null,
+        };
+    }
+
     private function getAoGroupForUser(array $user): ?string
     {
         return match ($user['role'] ?? '') {
@@ -78,6 +105,21 @@ class ProspectController
     private function isCreditProspect(array $prospect): bool
     {
         return in_array($prospect['prospect_type'] ?? '', ['KREDIT', 'DEBITUR_EXISTING'], true);
+    }
+
+    private function getEmployeeDisplayName(?string $employeeId): ?string
+    {
+        $employeeId = trim((string) $employeeId);
+        if ($employeeId === '') {
+            return null;
+        }
+
+        try {
+            $employee = Database::getPegawaiById($employeeId);
+            return $employee['full_name'] ?? null;
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     private function getDefaultCreditDocuments(): array
@@ -129,22 +171,29 @@ class ProspectController
         ];
     }
 
-    private function ensureCreditPipeline(array $prospect, array $user, ?string $note = null): int
+    private function ensureCreditPipeline(array $prospect, array $user, ?string $note = null, ?int $requestedLoanAmount = null): int
     {
+        $this->ensureColumnExists('prospect_credit_pipelines', 'requested_loan_amount', 'BIGINT UNSIGNED DEFAULT NULL AFTER `assigned_to`');
+
         $stmt = $this->db->prepare("SELECT id FROM prospect_credit_pipelines WHERE prospect_id = :pid");
         $stmt->execute([':pid' => $prospect['id']]);
         $existing = $stmt->fetch();
         if ($existing) {
+            if ($requestedLoanAmount !== null && $requestedLoanAmount > 0) {
+                $this->db->prepare("UPDATE prospect_credit_pipelines SET requested_loan_amount = :amount, updated_at = NOW() WHERE id = :id")
+                    ->execute([':amount' => $requestedLoanAmount, ':id' => $existing['id']]);
+            }
             return (int) $existing['id'];
         }
 
         $now = date('Y-m-d H:i:s');
         $ins = $this->db->prepare("INSERT INTO prospect_credit_pipelines
-            (prospect_id, assigned_to, confirmation_at, current_stage, pipeline_status, created_by)
-            VALUES (:pid, :assigned_to, :confirmation_at, 'FORMULIR', 'PROSPECT_CONFIRMED', :created_by)");
+            (prospect_id, assigned_to, requested_loan_amount, confirmation_at, current_stage, pipeline_status, created_by)
+            VALUES (:pid, :assigned_to, :requested_loan_amount, :confirmation_at, 'FORMULIR', 'PROSPECT_CONFIRMED', :created_by)");
         $ins->execute([
             ':pid' => $prospect['id'],
             ':assigned_to' => $prospect['assigned_to'] ?? null,
+            ':requested_loan_amount' => $requestedLoanAmount && $requestedLoanAmount > 0 ? $requestedLoanAmount : null,
             ':confirmation_at' => $now,
             ':created_by' => $user['employee_id'] ?? 'system',
         ]);
@@ -186,6 +235,9 @@ class ProspectController
         }
 
         if ($role === 'superuser') {
+            if (!empty($user['access_korwil'])) {
+                return ($prospect['korwil'] ?? '') === $user['access_korwil'];
+            }
             return $kodeKantor === '000' || ($prospect['kode_kantor'] ?? '') === $kodeKantor;
         }
 
@@ -194,6 +246,123 @@ class ProspectController
         }
 
         return ($prospect['created_by'] ?? '') === $employeeId;
+    }
+
+    private function canDelegateProspect(array $user): bool
+    {
+        $userRole = $user['role'] ?? 'staff';
+        $userPerms = $user['permissions'] ?? [];
+        $userKodeKantor = $user['kode_kantor'] ?? '000';
+        $isBranchDelegator = preg_match('/^(00[1-9]|0[1-2][0-9]|028)$/', (string)$userKodeKantor) === 1;
+
+        return $userRole === 'developer'
+            || ($userRole === 'superuser' && $isBranchDelegator && in_array('SUPERUSER_PROSPEK', $userPerms, true));
+    }
+
+    private function getAoActiveWorkloads(array $employeeIds): array
+    {
+        $employeeIds = array_values(array_unique(array_filter($employeeIds)));
+        if (empty($employeeIds)) {
+            return [];
+        }
+
+        $placeholders = [];
+        $binds = [];
+        foreach ($employeeIds as $i => $employeeId) {
+            $key = ":ao_{$i}";
+            $placeholders[] = $key;
+            $binds[$key] = $employeeId;
+        }
+
+        $stmt = $this->db->prepare("SELECT assigned_to, COUNT(*) AS active_count
+            FROM prospects
+            WHERE delegation_status = 'SUDAH_DIDELEGASIKAN'
+              AND assigned_to IN (" . implode(',', $placeholders) . ")
+              AND status NOT IN ('CLOSING','REJECT')
+            GROUP BY assigned_to");
+        $stmt->execute($binds);
+
+        $counts = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $counts[$row['assigned_to']] = (int) $row['active_count'];
+        }
+
+        return $counts;
+    }
+
+    private function attachAoWorkloads(array $candidates): array
+    {
+        $limit = max(1, (int) env('AO_WORKLOAD_LIMIT', 10));
+        $counts = $this->getAoActiveWorkloads(array_map(fn($ao) => $ao['employee_id'] ?? '', $candidates));
+
+        foreach ($candidates as &$candidate) {
+            $activeCount = $counts[$candidate['employee_id'] ?? ''] ?? 0;
+            $candidate['active_count'] = $activeCount;
+            $candidate['workload_limit'] = $limit;
+            $candidate['is_overload'] = $activeCount >= $limit;
+        }
+        unset($candidate);
+
+        return $candidates;
+    }
+
+    private function getProspectsForDelegation(array $ids, array $user): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
+        if (empty($ids)) {
+            sendResponse(400, 'Pilih minimal 1 prospek', null);
+        }
+        if (count($ids) > 50) {
+            sendResponse(400, 'Maksimal 50 prospek per sekali delegasi', null);
+        }
+
+        $placeholders = [];
+        $binds = [];
+        foreach ($ids as $i => $id) {
+            $key = ":id_{$i}";
+            $placeholders[] = $key;
+            $binds[$key] = $id;
+        }
+
+        $stmt = $this->db->prepare("SELECT * FROM prospects WHERE id IN (" . implode(',', $placeholders) . ")");
+        $stmt->execute($binds);
+        $prospects = $stmt->fetchAll();
+
+        if (count($prospects) !== count($ids)) {
+            sendResponse(404, 'Sebagian prospek tidak ditemukan', null);
+        }
+
+        $kodeKantor = null;
+        $requiredGroup = null;
+        foreach ($prospects as $prospect) {
+            if (!$this->canAccessProspect($prospect, $user)) {
+                sendResponse(403, 'Ada prospek yang tidak bisa Anda akses', null);
+            }
+            if (($prospect['delegation_status'] ?? '') === 'SUDAH_DIDELEGASIKAN') {
+                sendResponse(400, 'Pilih hanya prospek yang belum didelegasikan', null);
+            }
+
+            $prospectGroup = $this->getAoGroupForProspectType($prospect['prospect_type']);
+            if ($prospectGroup === null) {
+                sendResponse(400, 'Ada jenis prospek yang belum punya group AO tujuan', null);
+            }
+
+            $kodeKantor ??= $prospect['kode_kantor'];
+            $requiredGroup ??= $prospectGroup;
+
+            if ($kodeKantor !== $prospect['kode_kantor']) {
+                sendResponse(400, 'Bulk delegasi hanya untuk prospek di cabang yang sama', null);
+            }
+            if ($requiredGroup !== $prospectGroup) {
+                sendResponse(400, 'Bulk delegasi hanya untuk jenis prospek dengan AO tujuan yang sama', null);
+            }
+        }
+
+        return [
+            'prospects' => $prospects,
+            'kode_kantor' => $kodeKantor,
+            'group_jabatan' => $requiredGroup,
+        ];
     }
 
     private function canUpdateSla(array $prospect, array $user): bool
@@ -367,7 +536,10 @@ class ProspectController
         if ($userRole === 'developer') {
             // Full access, no filter
         } elseif ($userRole === 'superuser') {
-            if ($userKodeKantor === '000') {
+            if ($userAccessKorwil) {
+                $sql .= " AND kk.korwil = :user_korwil";
+                $binds[':user_korwil'] = $userAccessKorwil;
+            } elseif ($userKodeKantor === '000') {
                 // Pusat superuser: bisa lihat semua
             } else {
                 // Cabang superuser: hanya cabangnya
@@ -536,6 +708,9 @@ class ProspectController
             sendResponse(403, 'Anda tidak punya akses ke prospek ini', null);
         }
 
+        $prospect['created_by_name'] = $this->getEmployeeDisplayName($prospect['created_by'] ?? null);
+        $prospect['assigned_to_name'] = $this->getEmployeeDisplayName($prospect['assigned_to'] ?? null);
+
         // Get follow ups
         $fuStmt = $this->db->prepare("SELECT * FROM prospect_follow_ups WHERE prospect_id = :id ORDER BY follow_up_date DESC");
         $fuStmt->execute([':id' => $id]);
@@ -600,16 +775,10 @@ class ProspectController
     public function delegate(array $input): void
     {
         $user = $this->getCurrentUser();
-        $userRole = $user['role'] ?? 'staff';
-        $userPerms = $user['permissions'] ?? [];
         $prospectId = (int)($input['prospect_id'] ?? 0);
         $assignedTo = trim($input['assigned_to'] ?? '');
 
-        $userKodeKantor = $user['kode_kantor'] ?? '000';
-        $canDelegate = $userRole === 'developer'
-            || ($userRole === 'superuser' && $userKodeKantor !== '000' && in_array('SUPERUSER_PROSPEK', $userPerms, true));
-
-        if (!$canDelegate) {
+        if (!$this->canDelegateProspect($user)) {
             sendResponse(403, 'Delegasi hanya bisa dilakukan Developer atau Superuser cabang non-000', null);
         }
 
@@ -663,6 +832,108 @@ class ProspectController
             "Didelegasikan oleh " . ($user['full_name'] ?? 'Superuser'));
 
         sendResponse(200, 'Prospek berhasil didelegasikan', null);
+    }
+
+    public function delegateBulk(array $input): void
+    {
+        $user = $this->getCurrentUser();
+        if (!$this->canDelegateProspect($user)) {
+            sendResponse(403, 'Delegasi hanya bisa dilakukan Developer atau Superuser cabang non-000', null);
+        }
+
+        $ids = $input['prospect_ids'] ?? [];
+        $assignedTo = trim((string)($input['assigned_to'] ?? ''));
+        if (!is_array($ids) || $assignedTo === '') {
+            sendResponse(400, 'prospect_ids dan assigned_to wajib diisi', null);
+        }
+
+        $bundle = $this->getProspectsForDelegation($ids, $user);
+        $prospects = $bundle['prospects'];
+        $kodeKantor = $bundle['kode_kantor'];
+        $requiredGroup = $bundle['group_jabatan'];
+
+        $candidates = $this->getAoCandidates($kodeKantor, $requiredGroup, $this->getSsoAoTypeForGroup($requiredGroup));
+        $isValidAo = false;
+        foreach ($candidates as $candidate) {
+            if (($candidate['employee_id'] ?? '') === $assignedTo) {
+                $isValidAo = true;
+                break;
+            }
+        }
+
+        if (!$isValidAo) {
+            sendResponse(400, "AO tujuan harus {$requiredGroup} di cabang {$kodeKantor}", null);
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $this->db->beginTransaction();
+        try {
+            $upd = $this->db->prepare("UPDATE prospects SET
+                delegation_status = 'SUDAH_DIDELEGASIKAN',
+                assigned_to = :to,
+                assigned_by = :by,
+                assigned_at = :at,
+                updated_at = NOW()
+                WHERE id = :id");
+
+            foreach ($prospects as $prospect) {
+                $upd->execute([
+                    ':to' => $assignedTo,
+                    ':by' => $user['employee_id'] ?? '',
+                    ':at' => $now,
+                    ':id' => $prospect['id'],
+                ]);
+
+                $this->addHistory((int)$prospect['id'], 'DELEGATED', null, null, null, $assignedTo,
+                    "Didelegasikan massal oleh " . ($user['full_name'] ?? 'Superuser'),
+                    ['bulk_delegation' => true, 'total_selected' => count($prospects)]);
+            }
+
+            $this->db->commit();
+        } catch (\Exception $e) {
+            $this->db->rollBack();
+            sendResponse(500, 'Gagal memproses bulk delegasi', null);
+        }
+
+        sendResponse(200, count($prospects) . ' prospek berhasil didelegasikan', [
+            'assigned_to' => $assignedTo,
+            'total' => count($prospects),
+        ]);
+    }
+
+    public function aoWorkload(array $params): void
+    {
+        $user = $this->getCurrentUser();
+        if (!$this->canDelegateProspect($user)) {
+            sendResponse(403, 'Hanya delegator yang bisa melihat beban AO', null);
+        }
+
+        $ids = [];
+        if (!empty($params['prospect_ids'])) {
+            $ids = array_map('intval', explode(',', (string)$params['prospect_ids']));
+        }
+
+        if (!empty($ids)) {
+            $bundle = $this->getProspectsForDelegation($ids, $user);
+            $kodeKantor = $bundle['kode_kantor'];
+            $groupJabatan = $bundle['group_jabatan'];
+        } else {
+            $kodeKantor = $params['kode_kantor'] ?? null;
+            $groupJabatan = $params['group_jabatan'] ?? null;
+        }
+
+        if (!$kodeKantor || !$groupJabatan) {
+            sendResponse(400, 'kode_kantor/group_jabatan atau prospect_ids wajib diisi', null);
+        }
+
+        $candidates = $this->getAoCandidates($kodeKantor, $groupJabatan, $this->getSsoAoTypeForGroup($groupJabatan));
+        sendResponse(200, 'OK', [
+            'kode_kantor' => $kodeKantor,
+            'group_jabatan' => $groupJabatan,
+            'selected_count' => count($ids),
+            'workload_limit' => max(1, (int) env('AO_WORKLOAD_LIMIT', 10)),
+            'ao' => $this->attachAoWorkloads($candidates),
+        ]);
     }
 
 
@@ -755,7 +1026,9 @@ class ProspectController
     {
         $user = $this->getCurrentUser();
         $prospectId = (int)($input['prospect_id'] ?? 0);
+        $requestedLoanAmount = (int)($input['requested_loan_amount'] ?? 0);
         if ($prospectId <= 0) sendResponse(400, 'prospect_id wajib diisi', null);
+        if ($requestedLoanAmount <= 0) sendResponse(400, 'Plafon pinjaman wajib diisi', null);
 
         $stmt = $this->db->prepare("SELECT * FROM prospects WHERE id = :id");
         $stmt->execute([':id' => $prospectId]);
@@ -767,16 +1040,22 @@ class ProspectController
         if ($prospect['delegation_status'] !== 'SUDAH_DIDELEGASIKAN') sendResponse(400, 'Prospek harus didelegasikan ke AO lebih dulu', null);
         if (in_array($prospect['status'], ['CLOSING', 'REJECT'], true)) sendResponse(400, 'Prospek sudah selesai', null);
 
-        $pipelineId = $this->ensureCreditPipeline($prospect, $user, $input['note'] ?? null);
+        $pipelineId = $this->ensureCreditPipeline($prospect, $user, $input['note'] ?? null, $requestedLoanAmount);
         if ($prospect['status'] === 'OPEN') {
             $this->db->prepare("UPDATE prospects SET status = 'FOLLOW_UP', updated_at = NOW() WHERE id = :id")
                 ->execute([':id' => $prospectId]);
         }
 
         $this->addHistory($prospectId, 'CREDIT_PIPELINE_CREATED', $prospect['status'], 'FOLLOW_UP', null, null,
-            'Debitur konfirmasi berminat, pipeline kredit dibuat', ['pipeline_id' => $pipelineId]);
+            'Debitur konfirmasi berminat, pipeline kredit dibuat', [
+                'pipeline_id' => $pipelineId,
+                'requested_loan_amount' => $requestedLoanAmount,
+            ]);
 
-        sendResponse(200, 'Pipeline kredit berhasil dibuat', ['pipeline_id' => $pipelineId]);
+        sendResponse(200, 'Pipeline kredit berhasil dibuat', [
+            'pipeline_id' => $pipelineId,
+            'requested_loan_amount' => $requestedLoanAmount,
+        ]);
     }
 
     public function completeCreditDocumentation(array $input): void
@@ -1266,6 +1545,7 @@ class ProspectController
         $user = $this->getCurrentUser();
         $userRole = $user['role'] ?? 'staff';
         $userKodeKantor = $user['kode_kantor'] ?? '000';
+        $userAccessKorwil = $user['access_korwil'] ?? null;
 
         // Default range: closing = akhir bulan kemarin, harian = hari ini
         $defaultClosingEnd = date('Y-m-t', strtotime('last month'));
@@ -1284,7 +1564,20 @@ class ProspectController
         if ($userRole === 'developer') {
             // Full access
         } elseif ($userRole === 'superuser') {
-            if ($userKodeKantor !== '000') {
+            if ($userAccessKorwil) {
+                $codes = Database::getKodeKantorByKorwil($userAccessKorwil);
+                if (!empty($codes)) {
+                    $ph = [];
+                    foreach ($codes as $i => $c) {
+                        $k = ":access_kw_{$i}";
+                        $ph[] = $k;
+                        $binds[$k] = $c;
+                    }
+                    $accessWhere = " AND p.kode_kantor IN (" . implode(',', $ph) . ")";
+                } else {
+                    $accessWhere = " AND 1=0";
+                }
+            } elseif ($userKodeKantor !== '000') {
                 $accessWhere = " AND p.kode_kantor = :ukk";
                 $binds[':ukk'] = $userKodeKantor;
             }
@@ -1411,13 +1704,22 @@ class ProspectController
     {
         $kodeKantor = $params['kode_kantor'] ?? null;
         $groupJabatan = $params['group_jabatan'] ?? null;
+        $tipe = $params['tipe'] ?? null;
 
-        $data = $this->getAoCandidates($kodeKantor, $groupJabatan);
+        $data = $this->attachAoWorkloads($this->getAoCandidates($kodeKantor, $groupJabatan, $tipe));
         sendResponse(200, 'OK', $data);
     }
 
-    private function getAoCandidates(?string $kodeKantor = null, ?string $groupJabatan = null): array
+    private function getAoCandidates(?string $kodeKantor = null, ?string $groupJabatan = null, ?string $tipe = null): array
     {
+        $token = AuthMiddleware::getToken();
+        if ($token && $kodeKantor) {
+            $ssoData = $this->getAoCandidatesFromSso($token, $kodeKantor, $groupJabatan, $tipe);
+            if (!empty($ssoData)) {
+                return $ssoData;
+            }
+        }
+
         try {
             return Database::getPegawaiAktif($kodeKantor, $groupJabatan);
         } catch (\Exception $e) {
@@ -1438,5 +1740,107 @@ class ProspectController
 
             return array_values($dummyAO);
         }
+    }
+
+    private function getAoCandidatesFromSso(string $token, string $kodeKantor, ?string $groupJabatan = null, ?string $tipe = null): array
+    {
+        if ($token === 'session-authenticated') {
+            return [];
+        }
+
+        $tipeCandidates = $this->buildSsoAoTypeCandidates($tipe, $groupJabatan);
+        if (empty($tipeCandidates)) {
+            return [];
+        }
+
+        $baseUrl = rtrim((string) env('SSO_BASE_URL', env('SIMPEG_BASE_URL', 'https://apisso.bkkjateng.co.id')), '/');
+        $configuredEndpoint = trim((string) env('SSO_AO_ENDPOINT', ''));
+        $endpoints = $configuredEndpoint !== ''
+            ? [$configuredEndpoint]
+            : [
+                '/api/ao/list',
+            ];
+
+        foreach ($endpoints as $endpoint) {
+            foreach ($tipeCandidates as $tipeValue) {
+                $url = $baseUrl . '/' . ltrim($endpoint, '/') . '?' . http_build_query([
+                    'tipe' => $tipeValue,
+                    'kode_cabang' => $kodeKantor,
+                ]);
+
+                $response = httpRequest('GET', $url, null, [
+                    'Authorization: Bearer ' . $token,
+                ]);
+
+                if (($response['status'] ?? 0) !== 200) {
+                    continue;
+                }
+
+                $normalized = $this->normalizeSsoAoResponse($response['body'] ?? [], $groupJabatan, $kodeKantor);
+                if (!empty($normalized)) {
+                    return $normalized;
+                }
+            }
+        }
+
+        return [];
+    }
+
+    private function buildSsoAoTypeCandidates(?string $tipe = null, ?string $groupJabatan = null): array
+    {
+        $values = [];
+        if ($tipe !== null && trim($tipe) !== '') {
+            return [trim($tipe)];
+        }
+
+        $group = strtolower(trim((string) $groupJabatan));
+        if ($group !== '') {
+            if (str_contains($group, 'kredit')) {
+                $values = array_merge($values, ['kredit', 'KREDIT', 'AO Kredit']);
+            } elseif (str_contains($group, 'dana')) {
+                $values = array_merge($values, ['dana', 'DANA', 'AO Dana']);
+            } elseif (str_contains($group, 'remedial')) {
+                $values = array_merge($values, ['remedial', 'REMEDIAL', 'AO Remedial']);
+            }
+        }
+
+        return array_values(array_unique(array_filter($values, fn($value) => trim((string) $value) !== '')));
+    }
+
+    private function normalizeSsoAoResponse(array $body, ?string $groupJabatan, ?string $kodeKantor): array
+    {
+        $rows = $body['data'] ?? $body['result'] ?? $body['rows'] ?? [];
+        if (isset($rows['data']) && is_array($rows['data'])) {
+            $rows = $rows['data'];
+        }
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $employeeId = $row['employee_id'] ?? $row['id_peg'] ?? $row['kode_pegawai'] ?? $row['nik'] ?? null;
+            $fullName = $row['full_name'] ?? $row['nama'] ?? $row['name'] ?? null;
+            if (!$employeeId || !$fullName) {
+                continue;
+            }
+
+            $normalized[] = [
+                'employee_id' => (string) $employeeId,
+                'full_name' => (string) $fullName,
+                'kode_kantor' => (string) ($row['kode_kantor'] ?? $row['kode_cabang'] ?? $kodeKantor ?? ''),
+                'branch_name' => (string) ($row['branch_name'] ?? $row['nama_cabang'] ?? $row['nama_kantor'] ?? ''),
+                'job_position' => (string) ($row['job_position'] ?? $row['jabatan'] ?? $row['nama_jabatan'] ?? $groupJabatan ?? ''),
+                'group_jabatan' => (string) ($row['group_jabatan'] ?? $groupJabatan ?? ''),
+            ];
+        }
+
+        usort($normalized, fn($a, $b) => strcmp($a['full_name'], $b['full_name']));
+        return $normalized;
     }
 }

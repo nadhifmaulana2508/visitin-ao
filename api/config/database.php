@@ -79,7 +79,7 @@ class Database
     {
         if (self::$dpkConn === null) {
             $host = env('DB_HOST', 'localhost');
-            $port = env('DB_PORT', '3306');
+            $port = env('DB_PORT', env('DB_ROOT', '3306'));
             $name = env('DB_NAME', 'dpk');
             $user = env('DB_USER', 'root');
             $pass = env('DB_PASS', '');
@@ -97,7 +97,7 @@ class Database
     {
         if (self::$simpegConn === null) {
             $host = env('SIMPEG_DB_HOST', env('DB_HOST', 'localhost'));
-            $port = env('SIMPEG_DB_PORT', env('DB_PORT', '3306'));
+            $port = env('SIMPEG_DB_PORT', env('SIMPEG_DB_ROOT', env('DB_PORT', env('DB_ROOT', '3306'))));
             $name = env('SIMPEG_DB_NAME', 'masq2971_simpeg_dummy');
             $user = env('SIMPEG_DB_USER', env('DB_USER', 'root'));
             $pass = env('SIMPEG_DB_PASS', env('DB_PASS', ''));

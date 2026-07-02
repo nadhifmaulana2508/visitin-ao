@@ -6,6 +6,7 @@ $user_role = $_SESSION['user_data']['role'] ?? 'staff';
 $user_name = $_SESSION['user_data']['full_name'] ?? 'User';
 $user_permissions = $_SESSION['user_data']['permissions'] ?? [];
 $user_kode_kantor = $_SESSION['user_data']['kode_kantor'] ?? ($_SESSION['user_data']['kode'] ?? '000');
+$user_access_korwil = $_SESSION['user_data']['access_korwil'] ?? null;
 $user_job_position = $_SESSION['user_data']['job_position'] ?? '';
 $user_group_jabatan = $_SESSION['user_data']['group_jabatan'] ?? '';
 
@@ -14,6 +15,7 @@ $is_superuser_menu = ($user_role === 'superuser') || in_array('SUPERUSER_PROSPEK
 $is_ao_kredit_menu = in_array('AO_KREDIT', $user_permissions, true) || $is_developer_menu;
 $is_ao_dana_menu = in_array('AO_DANA', $user_permissions, true) || $is_developer_menu;
 $is_ao_remedial_menu = in_array('AO_REMEDIAL_FE', $user_permissions, true) || in_array('AO_REMEDIAL_BE', $user_permissions, true) || $is_developer_menu;
+$is_branch_delegator = preg_match('/^(00[1-9]|0[1-2][0-9]|028)$/', (string)$user_kode_kantor) === 1;
 $is_known_prospek_job = in_array($user_job_position, [
     'Staf Sistem dan Jaringan TI',
     'Account Officer Kredit',
@@ -25,13 +27,13 @@ $is_known_prospek_job = in_array($user_job_position, [
 ], true);
 
 $menu_access = [
-    'can_access_prospek' => $is_known_prospek_job || $is_superuser_menu || $is_ao_kredit_menu || $is_ao_dana_menu || $is_ao_remedial_menu,
-    'can_input_prospek' => $is_known_prospek_job || $is_superuser_menu || $is_ao_kredit_menu || $is_ao_dana_menu || $is_ao_remedial_menu,
-    'can_delegate_prospek' => $is_superuser_menu,
-    'can_view_report_prospek' => $is_superuser_menu || $user_kode_kantor === '000',
+    'can_access_prospek' => true,
+    'can_input_prospek' => true,
+    'can_delegate_prospek' => $is_developer_menu || ($user_role === 'superuser' && $is_branch_delegator),
+    'can_view_report_prospek' => true,
     'can_access_mapping' => $is_superuser_menu || $is_ao_kredit_menu || $is_ao_remedial_menu,
     'can_access_nominatif' => $is_superuser_menu || $is_ao_kredit_menu || $is_ao_remedial_menu,
-    'can_access_history' => true,
+    'can_access_history' => $user_role !== 'staff',
     'can_access_profile' => true,
 ];
 ?>
@@ -213,6 +215,15 @@ $menu_access = [
             background-color: #F8FAFC; color: #64748B; cursor: not-allowed;
         }
         .input-custom::placeholder { color: #94A3B8; font-weight: 400; }
+
+        .modal-dialog.modal-dialog-centered {
+            margin-left: auto !important;
+            margin-right: auto !important;
+            width: calc(100% - 30px);
+        }
+        .modal-dialog.modal-dialog-centered.modal-lg {
+            max-width: min(900px, calc(100% - 30px));
+        }
 
         .form-label-custom {
             font-size: 0.7rem; font-weight: 700; color: #64748B;

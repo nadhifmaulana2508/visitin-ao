@@ -20,6 +20,7 @@ $can_delegate_prospek = (bool)($menu['can_delegate_prospek'] ?? $is_superuser);
 $can_view_report_prospek = (bool)($menu['can_view_report_prospek'] ?? ($is_superuser || $is_pusat));
 $can_access_mapping = (bool)($menu['can_access_mapping'] ?? ($is_ao || $is_superuser));
 $can_access_nominatif = (bool)($menu['can_access_nominatif'] ?? ($is_ao || $is_superuser));
+$can_access_history = (bool)($menu['can_access_history'] ?? true);
 ?>
 
 <style>
@@ -153,7 +154,7 @@ $can_access_nominatif = (bool)($menu['can_access_nominatif'] ?? ($is_ao || $is_s
         </a>
         <?php endif; ?>
 
-        <?php if ($can_view_report_prospek): ?>
+        <?php if ($can_view_report_prospek && $role !== 'staff'): ?>
         <a href="<?= BASE_APP ?>/daftar-prospek?view=report" class="menu-card">
             <div class="menu-icon-wrapper icon-blue"><i class="fa-solid fa-file-lines"></i></div>
             <span class="menu-title">Laporan Prospek</span>
@@ -207,25 +208,31 @@ $can_access_nominatif = (bool)($menu['can_access_nominatif'] ?? ($is_ao || $is_s
     <?php endif; ?>
 
     <!-- ============ MENU LAPORAN (Superuser + Developer + Pusat) ============ -->
-    <?php if ($is_superuser || $is_pusat): ?>
+    <?php if ($can_access_history || $can_view_report_prospek || $can_access_mapping): ?>
     <h6 class="section-heading"><i class="fa-solid fa-chart-pie me-2 text-accent"></i>Laporan & Monitoring</h6>
     <div class="grid-responsive mb-4">
+        <?php if ($can_access_history): ?>
         <a href="<?= BASE_APP ?>/history" class="menu-card">
             <div class="menu-icon-wrapper icon-blue"><i class="fa-solid fa-clock-rotate-left"></i></div>
             <span class="menu-title">Riwayat Aktivitas</span>
         </a>
+        <?php endif; ?>
+        <?php if ($can_view_report_prospek): ?>
         <a href="<?= BASE_APP ?>/daftar-prospek?view=report" class="menu-card">
             <div class="menu-icon-wrapper icon-green"><i class="fa-solid fa-file-lines"></i></div>
             <span class="menu-title">Report Prospek</span>
         </a>
+        <?php endif; ?>
         <!-- <a href="<?= BASE_APP ?>/daftar-prospek?source=non_ao" class="menu-card">
             <div class="menu-icon-wrapper icon-orange"><i class="fa-solid fa-user-clock"></i></div>
             <span class="menu-title">Input Non-AO</span>
         </a> -->
+        <?php if ($can_access_mapping): ?>
         <a href="<?= BASE_APP ?>/mapping" class="menu-card">
             <div class="menu-icon-wrapper icon-purple"><i class="fa-solid fa-ranking-star"></i></div>
             <span class="menu-title">Performa AO</span>
         </a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 

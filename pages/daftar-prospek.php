@@ -2,6 +2,7 @@
 $is_ao = in_array($user_role, ['ao_kredit', 'ao_dana', 'ao_remedial', 'developer']);
 $is_superuser = in_array($user_role, ['superuser', 'developer']);
 $is_pusat = ($user_kode_kantor === '000');
+$user_access_korwil = $_SESSION['user_data']['access_korwil'] ?? '';
 
 // Default filter: closing_date akhir bulan kemarin, harian_date hari ini
 $default_closing_date = date('Y-m-t', strtotime('last month'));
@@ -12,6 +13,7 @@ $url_filter = $_GET['filter'] ?? '';
 $url_type = $_GET['type'] ?? '';
 $url_source = $_GET['source'] ?? '';
 $url_view = $_GET['view'] ?? 'list'; // list | report
+$can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 ?>
 
 <style>
@@ -104,6 +106,40 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
     }
     .pg-btn.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
     .pg-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .bulk-bar {
+        display: none; align-items: center; justify-content: space-between; gap: 10px;
+        margin: 0 16px 12px 16px; padding: 10px 12px; background: #102A43; color: #fff;
+        border-radius: 10px; box-shadow: 0 6px 18px rgba(16,42,67,0.18);
+    }
+    @media (min-width: 768px) { .bulk-bar { margin: 0 24px 12px 24px; } }
+    @media (min-width: 1024px) { .bulk-bar { margin: 0 32px 12px 32px; } }
+    .bulk-count { font-size: 0.72rem; font-weight: 800; }
+    .bulk-actions { display: flex; gap: 8px; }
+    .bulk-btn {
+        border: none; border-radius: 8px; padding: 7px 10px; font-size: 0.68rem;
+        font-weight: 800; cursor: pointer;
+    }
+    .bulk-btn.primary { background: var(--color-accent); color: #fff; }
+    .bulk-btn.ghost { background: rgba(255,255,255,0.12); color: #fff; }
+    .bulk-check {
+        position: absolute; top: 12px; right: 12px; z-index: 2; width: 20px; height: 20px;
+        accent-color: var(--color-primary);
+    }
+    .prospek-card.selectable { position: relative; padding-right: 44px; }
+    .prospek-card.selected { outline: 2px solid var(--color-primary); background: #F8FBFF; }
+    .ao-option {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 10px; border: 1px solid #E2E8F0; border-radius: 8px; margin-bottom: 8px;
+        cursor: pointer; background: #fff;
+    }
+    .ao-option:hover { border-color: var(--color-primary); }
+    .ao-option input { accent-color: var(--color-primary); }
+    .ao-name { font-size: 0.75rem; font-weight: 800; color: #1E293B; }
+    .ao-meta { font-size: 0.62rem; color: #64748B; }
+    .ao-load { font-size: 0.62rem; font-weight: 800; white-space: nowrap; }
+    .ao-load.ok { color: #2E7D32; }
+    .ao-load.warn { color: #E65100; }
 </style>
 
 
@@ -222,6 +258,16 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
     </div>
 </div>
 
+<?php if ($can_delegate_prospek): ?>
+<div class="bulk-bar" id="bulk-bar">
+    <div class="bulk-count"><i class="fa-solid fa-check-square me-1"></i><span id="bulk-count">0</span> dipilih</div>
+    <div class="bulk-actions">
+        <button type="button" class="bulk-btn ghost" onclick="clearBulkSelection()">Batal</button>
+        <button type="button" class="bulk-btn primary" onclick="openBulkDelegasi()">Delegasikan</button>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Content: List view -->
 <div class="list-area" id="view-list">
     <div class="grid-cards" id="prospect-container"></div>
@@ -241,6 +287,28 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
 <!-- FAB -->
 <a href="<?= BASE_APP ?>/input-prospek" class="btn-fab" title="Input Prospek Baru"><i class="fa-solid fa-plus"></i></a>
 
+<?php if ($can_delegate_prospek): ?>
+<div class="modal fade" id="modalBulkDelegasi" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0" style="border-radius:14px;">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-users-gear text-primary me-2"></i>Delegasi Massal</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="bulk-summary" class="p-2 rounded-3 mb-3" style="background:#F8FAFC;font-size:0.7rem;color:#475569;"></div>
+                <div id="bulk-ao-list"></div>
+                <div id="bulk-ao-empty" class="text-center text-muted py-3" style="display:none;font-size:0.75rem;">AO tidak ditemukan untuk cabang dan jenis ini</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light fw-bold" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-sm btn-primary fw-bold" id="btn-bulk-submit" onclick="submitBulkDelegasi()">Delegasikan</button>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 
 <script>
 (function() {
@@ -251,10 +319,15 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
     const urlView = '<?= $url_view ?>';
     const userRole = <?= json_encode($user_role) ?>;
     const userKodeKantor = <?= json_encode($user_kode_kantor) ?>;
+    const userAccessKorwil = <?= json_encode($user_access_korwil) ?>;
     const isPusat = <?= $is_pusat ? 'true' : 'false' ?>;
+    const canDelegateProspek = <?= $can_delegate_prospek ? 'true' : 'false' ?>;
 
     let currentPage = 1;
     let currentSource = urlSource || 'all';
+    let currentItems = new Map();
+    let selectedProspects = new Map();
+    let selectedBulkAo = '';
 
     // Pre-fill from URL params
     if (urlFilter === 'pending') currentSource = 'pending';
@@ -292,11 +365,14 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
     }
 
     function renderCabangFilter() {
+        if (userAccessKorwil) fKorwil.value = userAccessKorwil;
         const korwil = fKorwil.value;
         const filtered = korwil ? allCabang.filter(c => c.korwil === korwil) : allCabang.filter(c => c.kode_kantor !== '000');
         fCabang.innerHTML = '<option value="">Semua Cabang</option>';
         filtered.forEach(c => { fCabang.innerHTML += `<option value="${c.kode_kantor}">${c.kode_kantor} - ${c.nama_kantor}</option>`; });
-        if (!isPusat && userKodeKantor !== '000') {
+        if (userAccessKorwil) {
+            fKorwil.disabled = true;
+        } else if (!isPusat && userKodeKantor !== '000') {
             fCabang.value = userKodeKantor;
             fCabang.disabled = true;
             fKorwil.disabled = true;
@@ -353,6 +429,9 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
         const container = document.getElementById('prospect-container');
         const empty = document.getElementById('empty-state');
         const total = pagination.total || items.length;
+        selectedProspects.clear();
+        currentItems = new Map(items.map(p => [String(p.id), p]));
+        updateBulkBar();
 
         // Update stats
         document.getElementById('total-badge').textContent = total;
@@ -367,7 +446,10 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
             const statusBadge = getStatusBadge(p.status);
             const delBadge = p.delegation_status === 'BELUM_DIDELEGASIKAN' ? '<span class="badge-delegasi del-pending">Pending</span>' : '';
             const cabang = p.nama_kantor ? `${p.kode_kantor} - ${p.nama_kantor}` : p.kode_kantor;
-            return `<a href="${BASE_APP}/prospek-detail/${p.id}" class="prospek-card ${typeClass}">
+            const selectable = canDelegateProspek && p.delegation_status === 'BELUM_DIDELEGASIKAN';
+            const check = selectable ? `<input type="checkbox" class="bulk-check" aria-label="Pilih prospek" onclick="event.stopPropagation();" onchange="toggleBulkProspect(this, ${p.id})">` : '';
+            return `<a href="${BASE_APP}/prospek-detail/${p.id}" class="prospek-card ${typeClass} ${selectable ? 'selectable' : ''}" data-prospect-id="${p.id}">
+                ${check}
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <span class="badge-type ${typeBadge.cls}">${typeBadge.lbl}</span>
                     <div class="d-flex gap-1">${delBadge}${statusBadge}</div>
@@ -428,6 +510,142 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
         el.innerHTML = html;
     }
     window.goPage = function(p) { currentPage = p; loadData(); };
+
+    window.toggleBulkProspect = function(input, id) {
+        const card = input.closest('.prospek-card');
+        const prospect = currentItems.get(String(id));
+        if (!prospect) return;
+
+        if (input.checked) {
+            selectedProspects.set(String(id), prospect);
+            card?.classList.add('selected');
+        } else {
+            selectedProspects.delete(String(id));
+            card?.classList.remove('selected');
+        }
+        updateBulkBar();
+    };
+
+    window.clearBulkSelection = function() {
+        selectedProspects.clear();
+        document.querySelectorAll('.bulk-check').forEach(cb => { cb.checked = false; cb.closest('.prospek-card')?.classList.remove('selected'); });
+        updateBulkBar();
+    };
+
+    function updateBulkBar() {
+        const bar = document.getElementById('bulk-bar');
+        if (!bar) return;
+        const count = selectedProspects.size;
+        document.getElementById('bulk-count').textContent = count;
+        bar.style.display = count > 0 ? 'flex' : 'none';
+    }
+
+    function getAoGroupForType(type) {
+        if (type === 'KREDIT' || type === 'DEBITUR_EXISTING') return 'AO Kredit';
+        if (type === 'TABUNGAN' || type === 'DEPOSITO') return 'AO Dana';
+        if (type === 'PEMBELI_ASET') return 'AO Remedial';
+        return '';
+    }
+
+    window.openBulkDelegasi = async function() {
+        const selected = Array.from(selectedProspects.values());
+        if (selected.length === 0) return showToastSafe('Pilih prospek dulu', 'warning');
+
+        const kodeSet = new Set(selected.map(p => p.kode_kantor));
+        const groupSet = new Set(selected.map(p => getAoGroupForType(p.prospect_type)));
+        if (kodeSet.size > 1) return showToastSafe('Bulk delegasi harus dalam cabang yang sama', 'warning');
+        if (groupSet.size > 1) return showToastSafe('Bulk delegasi harus untuk jenis AO yang sama', 'warning');
+
+        selectedBulkAo = '';
+        const ids = selected.map(p => p.id);
+        const kode = selected[0].kode_kantor;
+        const cabang = selected[0].nama_kantor ? `${kode} - ${selected[0].nama_kantor}` : kode;
+        const group = getAoGroupForType(selected[0].prospect_type);
+        document.getElementById('bulk-summary').innerHTML = `<b>${selected.length} prospek</b> akan didelegasikan ke <b>${group}</b><br>Cabang: <b>${escapeHtml(cabang)}</b>`;
+        document.getElementById('bulk-ao-list').innerHTML = '<div class="text-center text-muted py-3" style="font-size:0.75rem;">Memuat AO...</div>';
+        document.getElementById('bulk-ao-empty').style.display = 'none';
+        document.getElementById('btn-bulk-submit').disabled = true;
+
+        new bootstrap.Modal(document.getElementById('modalBulkDelegasi')).show();
+
+        try {
+            const params = new URLSearchParams({ prospect_ids: ids.join(',') });
+            const res = await fetch(BASE_APP + '/api/?action=prospect_ao_workload&' + params.toString(), {credentials:'include'});
+            const body = await res.json();
+            if (body.status !== 200) {
+                document.getElementById('bulk-ao-list').innerHTML = '';
+                document.getElementById('bulk-ao-empty').textContent = body.message || 'Gagal memuat AO';
+                document.getElementById('bulk-ao-empty').style.display = 'block';
+                return;
+            }
+            renderBulkAoOptions(body.data?.ao || [], selected.length);
+        } catch(e) {
+            document.getElementById('bulk-ao-list').innerHTML = '';
+            document.getElementById('bulk-ao-empty').textContent = 'Gagal memuat AO';
+            document.getElementById('bulk-ao-empty').style.display = 'block';
+        }
+    };
+
+    function renderBulkAoOptions(list, selectedCount) {
+        const wrap = document.getElementById('bulk-ao-list');
+        const empty = document.getElementById('bulk-ao-empty');
+        if (!list.length) {
+            wrap.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+        empty.style.display = 'none';
+        wrap.innerHTML = list.map(ao => {
+            const afterCount = (ao.active_count || 0) + selectedCount;
+            const limit = ao.workload_limit || 10;
+            const overload = afterCount >= limit;
+            return `<label class="ao-option">
+                <span class="d-flex align-items-center gap-2">
+                    <input type="radio" name="bulk_ao" value="${escapeHtml(ao.employee_id)}" onchange="selectBulkAo(this.value)">
+                    <span>
+                        <span class="ao-name">${escapeHtml(ao.full_name || '-')}</span>
+                        <span class="ao-meta d-block">${escapeHtml(ao.job_position || ao.group_jabatan || '-')}</span>
+                    </span>
+                </span>
+                <span class="ao-load ${overload ? 'warn' : 'ok'}">${ao.active_count || 0}+${selectedCount}/${limit}${overload ? ' Overload' : ''}</span>
+            </label>`;
+        }).join('');
+    }
+
+    window.selectBulkAo = function(value) {
+        selectedBulkAo = value;
+        document.getElementById('btn-bulk-submit').disabled = !value;
+    };
+
+    window.submitBulkDelegasi = async function() {
+        if (!selectedBulkAo) return showToastSafe('Pilih AO tujuan', 'warning');
+        const ids = Array.from(selectedProspects.keys()).map(Number);
+        const btn = document.getElementById('btn-bulk-submit');
+        btn.disabled = true;
+        btn.textContent = 'Memproses...';
+        try {
+            const res = await fetch(BASE_APP + '/api/?action=prospect_delegate_bulk', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({prospect_ids: ids, assigned_to: selectedBulkAo})
+            });
+            const body = await res.json();
+            if (body.status === 200) {
+                showToastSafe(body.message || 'Delegasi berhasil', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('modalBulkDelegasi')).hide();
+                clearBulkSelection();
+                loadData();
+            } else {
+                showToastSafe(body.message || 'Delegasi gagal', 'danger');
+            }
+        } catch(e) {
+            showToastSafe('Delegasi gagal', 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Delegasikan';
+        }
+    };
 
     // =========================================
     // LOAD REPORT
@@ -510,6 +728,14 @@ $url_view = $_GET['view'] ?? 'list'; // list | report
         return `<span class="badge-status ${m[s]||''}">${(s||'').replace('_',' ')}</span>`;
     }
     function formatDate(d) { if(!d) return '-'; return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
+    function formatRupiah(n) { return new Intl.NumberFormat('id-ID', {style:'currency', currency:'IDR', maximumFractionDigits:0}).format(Number(n || 0)); }
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+    }
+    function showToastSafe(message, type = 'info') {
+        if (typeof showToast === 'function') showToast(message, type);
+        else alert(message);
+    }
 
     // =========================================
     // INIT

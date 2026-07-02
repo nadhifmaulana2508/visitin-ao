@@ -87,6 +87,11 @@ $prospect_id = $_GET['id'] ?? null;
     .pdf-page-canvas:last-child { margin-bottom:0; }
     .pdf-action-row { display:grid; grid-template-columns:1fr; gap:8px; }
     @media (min-width: 420px) { .pdf-action-row { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+    .input-evidence-map { width:100%; height:180px; border:1px solid #E2E8F0; border-radius:12px; overflow:hidden; background:#F1F5F9; }
+    .input-evidence-map iframe { width:100%; height:100%; border:0; display:block; }
+    .input-evidence-meta { margin-top:8px; font-size:0.68rem; color:#64748B; line-height:1.45; }
+    .input-photo-thumb { width:82px; height:110px; border:1px solid #E2E8F0; border-radius:12px; padding:6px; background:#fff; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(15,23,42,.08); }
+    .input-photo-thumb img { width:100%; height:100%; object-fit:cover; border-radius:8px; display:block; }
     .collapse-card .section-title { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; margin-bottom:0; }
     .collapse-card .collapse-body { margin-top:12px; }
     .collapse-card.collapsed .collapse-body { display:none; }
@@ -204,6 +209,18 @@ $prospect_id = $_GET['id'] ?? null;
 
         <!-- Actions -->
         <div id="action-section"></div>
+
+        <!-- Input Evidence -->
+        <div id="input-evidence-section" style="display:none;">
+            <div class="detail-card" id="input-location-section" style="display:none;">
+                <h6 class="section-title"><i class="fa-solid fa-location-dot me-2 text-accent"></i>Titik Lokasi</h6>
+                <div id="input-location-preview"></div>
+            </div>
+            <div class="detail-card" id="input-photo-section" style="display:none;">
+                <h6 class="section-title"><i class="fa-solid fa-image me-2 text-accent"></i>Foto / Dokumen</h6>
+                <div id="input-photo-preview"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -597,6 +614,7 @@ $prospect_id = $_GET['id'] ?? null;
         // Actions
         configureClosingForm(p);
         renderActions(p);
+        renderInputEvidence(p);
     }
 
     function configureClosingForm(p) {
@@ -713,6 +731,61 @@ $prospect_id = $_GET['id'] ?? null;
                 <div class="timeline-text">${h.note || h.action || '-'}</div>
             </li>
         `).join('');
+    }
+
+    function renderInputEvidence(p) {
+        const wrap = document.getElementById('input-evidence-section');
+        const locationSection = document.getElementById('input-location-section');
+        const locationPreview = document.getElementById('input-location-preview');
+        const photoSection = document.getElementById('input-photo-section');
+        const photoPreview = document.getElementById('input-photo-preview');
+        const lat = parseFloat(p.latitude);
+        const lng = parseFloat(p.longitude);
+        const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
+        const hasPhoto = !!p.foto_url;
+
+        wrap.style.display = hasLocation || hasPhoto ? 'block' : 'none';
+        locationSection.style.display = hasLocation ? 'block' : 'none';
+        photoSection.style.display = hasPhoto ? 'block' : 'none';
+
+        if (hasLocation) {
+            const mapUrl = buildOsmEmbedUrl(lat, lng);
+            const coordinateText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            const addressText = p.geo_address || [p.address, p.desa, p.kecamatan, p.kab_kota].filter(Boolean).join(', ');
+            locationPreview.innerHTML = `
+                <div class="input-evidence-map">
+                    <iframe loading="lazy" src="${escapeAttr(mapUrl)}"></iframe>
+                </div>
+                <div class="input-evidence-meta">
+                    <div><i class="fa-solid fa-location-crosshairs me-1"></i>${escapeHtml(coordinateText)}</div>
+                    ${addressText ? `<div>${escapeHtml(addressText)}</div>` : ''}
+                </div>
+            `;
+        } else {
+            locationPreview.innerHTML = '';
+        }
+
+        if (hasPhoto) {
+            const photoUrl = `${BASE_APP}/${p.foto_url}`;
+            photoPreview.innerHTML = `
+                <button type="button" class="input-photo-thumb" title="Lihat Foto Prospek" onclick="openFilePreview('${escapeAttr(photoUrl)}', 'IMAGE', 'Foto Prospek')">
+                    <img src="${escapeAttr(photoUrl)}" alt="Foto Prospek">
+                </button>
+            `;
+        } else {
+            photoPreview.innerHTML = '';
+        }
+    }
+
+    function buildOsmEmbedUrl(lat, lng) {
+        const delta = 0.01;
+        const bbox = [
+            (lng - delta).toFixed(6),
+            (lat - delta).toFixed(6),
+            (lng + delta).toFixed(6),
+            (lat + delta).toFixed(6)
+        ].join(',');
+        return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat.toFixed(6)},${lng.toFixed(6)}`;
     }
 
     function renderActions(p) {

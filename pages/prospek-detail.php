@@ -75,6 +75,7 @@ $prospect_id = $_GET['id'] ?? null;
     .icon-mini-btn.upload { background:#E3F2FD; color:#1565C0; }
     .icon-mini-btn.view { background:#F1F5F9; color:#334155; }
     .photo-chip { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:10px; padding:7px 10px; background:#F1F5F9; color:#475569; font-size:0.68rem; font-weight:800; }
+    .photo-icon-only { width:36px; height:36px; padding:0; border:none; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; background:#F1F5F9; color:#475569; }
     .preview-frame { width:100%; min-height:420px; border:1px solid #E2E8F0; border-radius:12px; }
     .preview-img { width:100%; max-height:70vh; object-fit:contain; border-radius:12px; background:#F8FAFC; }
     .pdf-mobile-preview { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:14px; color:#475569; max-height:70vh; overflow:auto; }
@@ -92,6 +93,8 @@ $prospect_id = $_GET['id'] ?? null;
     .collapse-card .chev { color:#94A3B8; transition:transform .15s; }
     .collapse-card.collapsed .chev { transform:rotate(-90deg); }
     .sla-subdocs { margin-top:8px; padding:10px; border-radius:12px; background:#F8FAFC; }
+    .sla-subdocs .section-title { margin-bottom:0; }
+    .sla-subdocs .collapse-body { margin-top:8px; }
     .stage-action-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
     .next-stage-pill { flex:1; background:#F1F5F9; color:#1E293B; border-radius:12px; padding:10px 12px; font-size:0.72rem; font-weight:800; }
 </style>
@@ -156,12 +159,15 @@ $prospect_id = $_GET['id'] ?? null;
             <div class="detail-card">
                 <h6 class="section-title"><i class="fa-solid fa-chart-gantt me-2 text-accent"></i>Pipeline SLA Kredit</h6>
                 <div id="sla-stages"></div>
-                <div class="sla-subdocs" id="credit-docs-section" style="display:none;">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="sla-subdocs collapse-card" id="credit-docs-section" style="display:none;">
+                    <h6 class="section-title" onclick="toggleCreditDocs(this)">
                         <span style="font-size:0.72rem;font-weight:800;color:#1E293B;"><i class="fa-solid fa-folder-open me-1 text-accent"></i>Pemberkasan</span>
-                        <span style="font-size:0.62rem;color:#64748B;font-weight:700;" id="credit-docs-summary">-</span>
-                    </div>
-                    <div id="credit-docs-list"></div>
+                        <span class="d-inline-flex align-items-center gap-2">
+                            <span style="font-size:0.62rem;color:#64748B;font-weight:700;" id="credit-docs-summary">-</span>
+                            <i class="fa-solid fa-chevron-down chev"></i>
+                        </span>
+                    </h6>
+                    <div class="collapse-body" id="credit-docs-list"></div>
                 </div>
             </div>
         </div>
@@ -262,6 +268,25 @@ $prospect_id = $_GET['id'] ?? null;
                     </div>
                     <button type="submit" class="action-btn btn-sla">Konfirmasi Lanjut</button>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Konfirmasi Pemberkasan -->
+<div class="modal fade" id="modalCompleteDocs" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="margin:15px; max-width:500px;">
+        <div class="modal-content" style="border-radius:16px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-folder-open text-primary me-2"></i>Pemberkasan Lengkap</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">Tandai pemberkasan sudah lengkap dan mulai hitung SLA kredit?</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="action-btn btn-sla mb-0" id="btn-confirm-complete-docs">Konfirmasi Pemberkasan</button>
+                    <button type="button" class="action-btn btn-wa mb-0" data-bs-dismiss="modal">Batal</button>
+                </div>
             </div>
         </div>
     </div>
@@ -499,6 +524,10 @@ $prospect_id = $_GET['id'] ?? null;
         titleEl.closest('.collapse-card')?.classList.toggle('collapsed');
     };
 
+    window.toggleCreditDocs = function(titleEl) {
+        titleEl.closest('.collapse-card')?.classList.toggle('collapsed');
+    };
+
     // =========================================
     // RENDER
     // =========================================
@@ -522,8 +551,9 @@ $prospect_id = $_GET['id'] ?? null;
         document.getElementById('d-product').innerHTML = '<i class="fa-solid fa-box-open me-1"></i>' + getProductLabel(p);
         const photoChip = document.getElementById('prospect-photo-chip');
         if (p.foto_url) {
-            photoChip.style.display = 'block';
-            photoChip.innerHTML = `<button type="button" class="photo-chip" onclick="openFilePreview('${BASE_APP}/${p.foto_url}', 'IMAGE', 'Foto Prospek')"><i class="fa-solid fa-camera"></i> Foto Prospek</button>`;
+            photoChip.style.display = 'flex';
+            photoChip.style.justifyContent = 'flex-end';
+            photoChip.innerHTML = `<button type="button" class="photo-icon-only" title="Lihat Foto Prospek" onclick="openFilePreview('${BASE_APP}/${p.foto_url}', 'IMAGE', 'Foto Prospek')"><i class="fa-solid fa-camera"></i></button>`;
         } else {
             photoChip.style.display = 'none';
         }
@@ -707,7 +737,7 @@ $prospect_id = $_GET['id'] ?? null;
             }
 
             if (isCredit && hasCreditPipeline && !docsComplete) {
-                html += `<button class="action-btn btn-sla" onclick="completeCreditDocs()"><i class="fa-solid fa-folder-open me-2"></i>Pemberkasan Lengkap</button>`;
+                html += `<button class="action-btn btn-sla" data-bs-toggle="modal" data-bs-target="#modalCompleteDocs"><i class="fa-solid fa-folder-open me-2"></i>Pemberkasan Lengkap</button>`;
             }
 
             if (p.status === 'SLA') {
@@ -777,15 +807,32 @@ $prospect_id = $_GET['id'] ?? null;
         this.value = formatPlainNumber(this.value);
     });
 
-    window.completeCreditDocs = async function() {
-        if (!confirm('Tandai pemberkasan sudah lengkap dan mulai hitung SLA?')) return;
+    async function completeCreditDocs() {
+        const button = document.getElementById('btn-confirm-complete-docs');
+        const originalText = button?.innerHTML;
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Memproses...';
+        }
         try {
             const res = await fetch(BASE_APP+'/api/?action=prospect_complete_credit_docs', {method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({prospect_id:prospectId})});
             const b = await res.json();
-            if (b.status===200) { showToast('<i class="fa-solid fa-check me-2"></i>'+b.message,'success'); setTimeout(()=>location.reload(),800); }
+            if (b.status===200) {
+                showToast('<i class="fa-solid fa-check me-2"></i>'+b.message,'success');
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCompleteDocs')).hide();
+                setTimeout(()=>location.reload(),800);
+            }
             else showToast(b.message||'Gagal','danger');
         } catch(e) { showToast('Error koneksi','danger'); }
-    };
+        finally {
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+    }
+
+    document.getElementById('btn-confirm-complete-docs').addEventListener('click', completeCreditDocs);
 
     document.getElementById('form-followup').addEventListener('submit', async function(e) {
         e.preventDefault();

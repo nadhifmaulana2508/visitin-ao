@@ -75,7 +75,9 @@ $prospect_id = $_GET['id'] ?? null;
     .icon-mini-btn.upload { background:#E3F2FD; color:#1565C0; }
     .icon-mini-btn.view { background:#F1F5F9; color:#334155; }
     .photo-chip { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:10px; padding:7px 10px; background:#F1F5F9; color:#475569; font-size:0.68rem; font-weight:800; }
-    .photo-icon-only { width:36px; height:36px; padding:0; border:none; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; background:#F1F5F9; color:#475569; }
+    .header-quick-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+    .header-icon-action { width:36px; height:36px; padding:0; border:none; border-radius:10px; display:none; align-items:center; justify-content:center; background:#F1F5F9; color:#475569; text-decoration:none; }
+    .header-icon-action:hover { color:#1E293B; background:#E2E8F0; }
     .preview-frame { width:100%; min-height:420px; border:1px solid #E2E8F0; border-radius:12px; }
     .preview-img { width:100%; max-height:70vh; object-fit:contain; border-radius:12px; background:#F8FAFC; }
     .pdf-mobile-preview { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:14px; color:#475569; max-height:70vh; overflow:auto; }
@@ -87,14 +89,9 @@ $prospect_id = $_GET['id'] ?? null;
     .pdf-page-canvas:last-child { margin-bottom:0; }
     .pdf-action-row { display:grid; grid-template-columns:1fr; gap:8px; }
     @media (min-width: 420px) { .pdf-action-row { grid-template-columns:repeat(2, minmax(0,1fr)); } }
-    .input-evidence-map { width:100%; height:180px; border:1px solid #E2E8F0; border-radius:12px; overflow:hidden; background:#F1F5F9; }
+    .input-evidence-map { width:100%; height:260px; border:1px solid #E2E8F0; border-radius:12px; overflow:hidden; background:#F1F5F9; }
     .input-evidence-map iframe { width:100%; height:100%; border:0; display:block; }
     .input-evidence-meta { margin-top:8px; font-size:0.68rem; color:#64748B; line-height:1.45; }
-    .input-evidence-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
-    @media (min-width: 768px) { .input-evidence-grid { grid-template-columns:1fr 1fr; } }
-    .input-evidence-grid .detail-card { margin-bottom:0; }
-    .input-photo-thumb { width:100%; height:180px; border:1px solid #E2E8F0; border-radius:12px; padding:6px; background:#fff; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(15,23,42,.08); }
-    .input-photo-thumb img { width:100%; height:100%; object-fit:cover; border-radius:8px; display:block; }
     .collapse-card .section-title { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; margin-bottom:0; }
     .collapse-card .collapse-body { margin-top:12px; }
     .collapse-card.collapsed .collapse-body { display:none; }
@@ -135,7 +132,11 @@ $prospect_id = $_GET['id'] ?? null;
             </div>
             <h5 class="fw-bold text-dark mb-1" id="d-name">-</h5>
             <p class="small text-muted mb-0" id="d-product"><i class="fa-solid fa-box-open me-1"></i>-</p>
-            <div class="mt-3" id="prospect-photo-chip" style="display:none;"></div>
+            <div class="header-quick-actions" id="header-quick-actions">
+                <button type="button" class="header-icon-action" id="btn-header-photo" title="Lihat Foto Prospek"><i class="fa-solid fa-camera"></i></button>
+                <button type="button" class="header-icon-action" id="btn-header-map" title="Lihat Titik Lokasi"><i class="fa-solid fa-location-dot"></i></button>
+                <a class="header-icon-action" id="btn-header-wa" title="Hubungi via WhatsApp" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i></a>
+            </div>
         </div>
 
         <!-- Info Nasabah -->
@@ -213,17 +214,6 @@ $prospect_id = $_GET['id'] ?? null;
         <!-- Actions -->
         <div id="action-section"></div>
 
-        <!-- Input Evidence -->
-        <div class="input-evidence-grid" id="input-evidence-section" style="display:none;">
-            <div class="detail-card" id="input-photo-section" style="display:none;">
-                <h6 class="section-title"><i class="fa-solid fa-image me-2 text-accent"></i>Foto / Dokumen</h6>
-                <div id="input-photo-preview"></div>
-            </div>
-            <div class="detail-card" id="input-location-section" style="display:none;">
-                <h6 class="section-title"><i class="fa-solid fa-location-dot me-2 text-accent"></i>Titik Lokasi</h6>
-                <div id="input-location-preview"></div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -464,6 +454,21 @@ $prospect_id = $_GET['id'] ?? null;
     </div>
 </div>
 
+<!-- Modal Preview Map -->
+<div class="modal fade" id="modalMapPreview" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg" style="margin:15px;">
+        <div class="modal-content" style="border-radius:16px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-location-dot text-primary me-2"></i>Titik Lokasi</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="map-preview-body"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <script>
 (function() {
@@ -569,14 +574,7 @@ $prospect_id = $_GET['id'] ?? null;
 
         document.getElementById('d-name').textContent = p.customer_name;
         document.getElementById('d-product').innerHTML = '<i class="fa-solid fa-box-open me-1"></i>' + getProductLabel(p);
-        const photoChip = document.getElementById('prospect-photo-chip');
-        if (p.foto_url) {
-            photoChip.style.display = 'flex';
-            photoChip.style.justifyContent = 'flex-end';
-            photoChip.innerHTML = `<button type="button" class="photo-icon-only" title="Lihat Foto Prospek" onclick="openFilePreview('${BASE_APP}/${p.foto_url}', 'IMAGE', 'Foto Prospek')"><i class="fa-solid fa-camera"></i></button>`;
-        } else {
-            photoChip.style.display = 'none';
-        }
+        renderHeaderQuickActions(p);
 
         // Info
         document.getElementById('d-cust-name').textContent = p.customer_name;
@@ -617,7 +615,6 @@ $prospect_id = $_GET['id'] ?? null;
         // Actions
         configureClosingForm(p);
         renderActions(p);
-        renderInputEvidence(p);
     }
 
     function configureClosingForm(p) {
@@ -736,48 +733,53 @@ $prospect_id = $_GET['id'] ?? null;
         `).join('');
     }
 
-    function renderInputEvidence(p) {
-        const wrap = document.getElementById('input-evidence-section');
-        const locationSection = document.getElementById('input-location-section');
-        const locationPreview = document.getElementById('input-location-preview');
-        const photoSection = document.getElementById('input-photo-section');
-        const photoPreview = document.getElementById('input-photo-preview');
+    function renderHeaderQuickActions(p) {
+        const actionsWrap = document.getElementById('header-quick-actions');
+        const photoButton = document.getElementById('btn-header-photo');
+        const mapButton = document.getElementById('btn-header-map');
+        const waButton = document.getElementById('btn-header-wa');
         const lat = parseFloat(p.latitude);
         const lng = parseFloat(p.longitude);
         const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
         const hasPhoto = !!p.foto_url;
 
-        wrap.style.display = hasLocation || hasPhoto ? 'block' : 'none';
-        locationSection.style.display = hasLocation ? 'block' : 'none';
-        photoSection.style.display = hasPhoto ? 'block' : 'none';
-
-        if (hasLocation) {
-            const mapUrl = buildOsmEmbedUrl(lat, lng);
-            const coordinateText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-            const addressText = p.geo_address || [p.address, p.desa, p.kecamatan, p.kab_kota].filter(Boolean).join(', ');
-            locationPreview.innerHTML = `
-                <div class="input-evidence-map">
-                    <iframe loading="lazy" src="${escapeAttr(mapUrl)}"></iframe>
-                </div>
-                <div class="input-evidence-meta">
-                    <div><i class="fa-solid fa-location-crosshairs me-1"></i>${escapeHtml(coordinateText)}</div>
-                    ${addressText ? `<div>${escapeHtml(addressText)}</div>` : ''}
-                </div>
-            `;
-        } else {
-            locationPreview.innerHTML = '';
-        }
-
+        photoButton.style.display = hasPhoto ? 'inline-flex' : 'none';
         if (hasPhoto) {
             const photoUrl = `${BASE_APP}/${p.foto_url}`;
-            photoPreview.innerHTML = `
-                <button type="button" class="input-photo-thumb" title="Lihat Foto Prospek" onclick="openFilePreview('${escapeAttr(photoUrl)}', 'IMAGE', 'Foto Prospek')">
-                    <img src="${escapeAttr(photoUrl)}" alt="Foto Prospek">
-                </button>
-            `;
-        } else {
-            photoPreview.innerHTML = '';
+            photoButton.onclick = () => openFilePreview(photoUrl, 'IMAGE', 'Foto Prospek');
         }
+
+        mapButton.style.display = hasLocation ? 'inline-flex' : 'none';
+        if (hasLocation) {
+            mapButton.onclick = () => openMapPreview(p, lat, lng);
+        }
+
+        if (p.phone_number) {
+            const wa = String(p.phone_number || '').replace(/\D/g, '').replace(/^0/, '62');
+            waButton.href = `https://wa.me/${wa}`;
+            waButton.style.display = 'inline-flex';
+        } else {
+            waButton.removeAttribute('href');
+            waButton.style.display = 'none';
+        }
+
+        actionsWrap.style.display = hasPhoto || hasLocation || !!p.phone_number ? 'flex' : 'none';
+    }
+
+    function openMapPreview(p, lat, lng) {
+        const mapUrl = buildOsmEmbedUrl(lat, lng);
+        const coordinateText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        const addressText = p.geo_address || [p.address, p.desa, p.kecamatan, p.kab_kota].filter(Boolean).join(', ');
+        document.getElementById('map-preview-body').innerHTML = `
+            <div class="input-evidence-map">
+                <iframe loading="lazy" src="${escapeAttr(mapUrl)}"></iframe>
+            </div>
+            <div class="input-evidence-meta">
+                <div><i class="fa-solid fa-location-crosshairs me-1"></i>${escapeHtml(coordinateText)}</div>
+                ${addressText ? `<div>${escapeHtml(addressText)}</div>` : ''}
+            </div>
+        `;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalMapPreview')).show();
     }
 
     function buildOsmEmbedUrl(lat, lng) {
@@ -829,12 +831,6 @@ $prospect_id = $_GET['id'] ?? null;
             }
 
             html += `<button class="action-btn btn-reject" data-bs-toggle="modal" data-bs-target="#modalReject"><i class="fa-solid fa-xmark me-2"></i>Reject</button>`;
-        }
-
-        // WhatsApp
-        if (p.phone_number) {
-            const wa = (p.phone_number||'').replace(/^0/,'62');
-            html += `<a href="https://wa.me/${wa}" target="_blank" class="action-btn btn-wa d-block text-center text-decoration-none"><i class="fa-brands fa-whatsapp me-2"></i>Hubungi via WhatsApp</a>`;
         }
 
         el.innerHTML = html ? `<div class="action-grid">${html}</div>` : '';

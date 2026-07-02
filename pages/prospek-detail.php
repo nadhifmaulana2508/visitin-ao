@@ -77,6 +77,12 @@ $prospect_id = $_GET['id'] ?? null;
     .photo-chip { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:10px; padding:7px 10px; background:#F1F5F9; color:#475569; font-size:0.68rem; font-weight:800; }
     .preview-frame { width:100%; min-height:420px; border:1px solid #E2E8F0; border-radius:12px; }
     .preview-img { width:100%; max-height:70vh; object-fit:contain; border-radius:12px; background:#F8FAFC; }
+    .pdf-mobile-preview { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:28px 18px; text-align:center; color:#475569; }
+    .pdf-mobile-preview i { font-size:2.5rem; color:#1565C0; margin-bottom:12px; }
+    .pdf-mobile-preview .title { font-size:0.85rem; font-weight:800; color:#1E293B; margin-bottom:4px; }
+    .pdf-mobile-preview .hint { font-size:0.68rem; margin-bottom:14px; }
+    .pdf-action-row { display:grid; grid-template-columns:1fr; gap:8px; }
+    @media (min-width: 420px) { .pdf-action-row { grid-template-columns:repeat(2, minmax(0,1fr)); } }
     .collapse-card .section-title { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; margin-bottom:0; }
     .collapse-card .collapse-body { margin-top:12px; }
     .collapse-card.collapsed .collapse-body { display:none; }
@@ -811,15 +817,48 @@ $prospect_id = $_GET['id'] ?? null;
     });
 
     window.openFilePreview = function(url, type, title) {
-        document.getElementById('file-preview-title').innerHTML = `<i class="fa-solid fa-eye text-primary me-2"></i>${title || 'Preview'}`;
+        document.getElementById('file-preview-title').innerHTML = `<i class="fa-solid fa-eye text-primary me-2"></i>${escapeHtml(title || 'Preview')}`;
         const body = document.getElementById('file-preview-body');
         if (type === 'PDF') {
-            body.innerHTML = `<iframe class="preview-frame" src="${url}"></iframe><a href="${url}" target="_blank" class="action-btn btn-follow-up d-block text-center text-decoration-none mt-3"><i class="fa-solid fa-up-right-from-square me-2"></i>Buka PDF</a>`;
+            const safeUrl = escapeAttr(url);
+            const safeTitle = escapeHtml(title || 'Berkas PDF');
+            if (isMobilePdfViewer()) {
+                body.innerHTML = `<div class="pdf-mobile-preview">
+                    <i class="fa-solid fa-file-pdf"></i>
+                    <div class="title">${safeTitle}</div>
+                    <div class="hint">Preview PDF di browser mobile kadang tidak terbaca. Buka file langsung agar tampil penuh.</div>
+                    <div class="pdf-action-row">
+                        <a href="${safeUrl}" target="_blank" rel="noopener" class="action-btn btn-follow-up d-block text-center text-decoration-none mb-0"><i class="fa-solid fa-up-right-from-square me-2"></i>Buka PDF</a>
+                        <a href="${safeUrl}" download class="action-btn btn-wa d-block text-center text-decoration-none mb-0"><i class="fa-solid fa-download me-2"></i>Unduh PDF</a>
+                    </div>
+                </div>`;
+            } else {
+                body.innerHTML = `<iframe class="preview-frame" src="${safeUrl}"></iframe><a href="${safeUrl}" target="_blank" rel="noopener" class="action-btn btn-follow-up d-block text-center text-decoration-none mt-3"><i class="fa-solid fa-up-right-from-square me-2"></i>Buka PDF</a>`;
+            }
         } else {
-            body.innerHTML = `<img class="preview-img" src="${url}" alt="${title || 'Foto'}">`;
+            body.innerHTML = `<img class="preview-img" src="${escapeAttr(url)}" alt="${escapeAttr(title || 'Foto')}">`;
         }
-        new bootstrap.Modal(document.getElementById('modalFilePreview')).show();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalFilePreview')).show();
     };
+
+    function isMobilePdfViewer() {
+        return window.matchMedia('(max-width: 767px)').matches
+            || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char]));
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/`/g, '&#096;');
+    }
 
     async function fileToBase64(file) {
         return new Promise((resolve, reject) => {

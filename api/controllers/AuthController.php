@@ -360,6 +360,7 @@ class AuthController
         $job = self::normalizeText($profile['job_position'] ?? '');
         $unit = self::normalizeText($profile['unit_kerja'] ?? '');
         $group = self::normalizeText($profile['group_jabatan'] ?? '');
+        $level = self::normalizeText($profile['level'] ?? '');
         $kodeKantor = (string) ($profile['kode_kantor'] ?? '000');
 
         if (
@@ -394,7 +395,14 @@ class AuthController
             'dewan komisaris',
             'direksi',
         ], true);
-        $isBranchLeader = str_contains($job, 'kepala bidang pemasaran') || str_contains($job, 'kepala cabang');
+        $isBranchLeader = self::isBranchCode($kodeKantor) && (
+            str_contains($job, 'kepala cabang')
+            || str_contains($job, 'kepala bidang pemasaran')
+            || (str_contains($job, 'kepala bidang') && str_contains($job, 'pemasaran'))
+            || str_contains($level, 'kepala cabang')
+            || str_contains($level, 'kepala bidang pemasaran')
+            || in_array($group, ['pe', 'ps'], true)
+        );
         if ($isSuperuserUnit || $isBranchLeader) {
             return [
                 'role' => 'superuser',

@@ -235,10 +235,16 @@ class Database
             }
         }
 
-        $sql = "SELECT * FROM kode_kantor";
+        $select = ["MIN(id) AS id", "kode_kantor", "MIN(nama_kantor) AS nama_kantor"];
+        if (in_array('korwil', $columns, true)) {
+            $select[] = "MIN(korwil) AS korwil";
+        }
+
+        $sql = "SELECT " . implode(', ', $select) . " FROM kode_kantor";
         if (!empty($where)) {
             $sql .= " WHERE " . implode(" AND ", $where);
         }
+        $sql .= " GROUP BY kode_kantor";
         $sql .= " ORDER BY kode_kantor ASC";
 
         $stmt = $db->prepare($sql);

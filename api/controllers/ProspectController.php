@@ -23,10 +23,30 @@ class ProspectController
             return;
         }
 
-        $stmt = $this->db->prepare("SHOW COLUMNS FROM `{$table}` LIKE :column");
-        $stmt->execute([':column' => $column]);
-        if (!$stmt->fetch()) {
-            $this->db->exec("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $table) || !preg_match('/^[a-zA-Z0-9_]+$/', $column)) {
+            sendResponse(500, 'Konfigurasi kolom database tidak valid', null);
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table
+              AND COLUMN_NAME = :column
+        ");
+        $stmt->execute([
+            ':table' => $table,
+            ':column' => $column,
+        ]);
+
+        if ((int) $stmt->fetchColumn() === 0) {
+            try {
+                $this->db->exec("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+            } catch (\PDOException $e) {
+                sendResponse(500, 'Kolom plafon belum tersedia dan gagal dibuat otomatis', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         $checked[$key] = true;

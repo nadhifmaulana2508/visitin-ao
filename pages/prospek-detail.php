@@ -752,7 +752,13 @@ $prospect_id = $_GET['id'] ?? null;
         try {
             const res = await fetch(BASE_APP+'/api/?action=prospect_confirm_credit_interest', {method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
             const b = await res.json();
-            if (b.status===200) { showToast('<i class="fa-solid fa-check me-2"></i>'+b.message,'success'); bootstrap.Modal.getInstance(document.getElementById('modalCreditInterest')).hide(); setTimeout(()=>location.reload(),800); }
+            if (b.status===200) {
+                showToast('<i class="fa-solid fa-check me-2"></i>'+b.message,'success');
+                const modalEl = document.getElementById('modalCreditInterest');
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                this.reset();
+                setTimeout(()=>location.reload(),800);
+            }
             else showToast(b.message||'Gagal','danger');
         } catch(e) { showToast('Error koneksi','danger'); }
     });

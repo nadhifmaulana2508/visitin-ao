@@ -311,6 +311,73 @@ class AuthController
         ];
     }
 
+    private static function authenticateSimpegDb(string $idPeg, string $password, string $app): ?array
+    {
+        if (!env_bool('SSO_DB_FALLBACK', false) && self::normalizeText(env('SSO_AUTH_MODE', 'http')) !== 'db') {
+            return null;
+        }
+
+        $db = Database::getSimpeg();
+        $stmt = $db->prepare("
+            SELECT a.*, p.nama
+            FROM tb_apk a
+            INNER JOIN tb_pegawai p ON a.id_peg = p.id_peg
+            WHERE a.id_peg = :id_peg
+            LIMIT 1
+        ");
+        $stmt->execute([':id_peg' => $idPeg]);
+        $user = $stmt->fetch();
+
+        if (!$user || !password_verify($password, (string)($user['pass'] ?? ''))) {
+            return null;
+        }
+
+        $appColumns = array_values(array_unique(array_filter([
+            $app,
+            env('SSO_DB_APP_COLUMN', ''),
+            $app === 'ims' ? 'vitised_ao' : '',
+            $app === 'ims' ? 'visitin_ao' : '',
+        ])));
+
+        $hasAppColumn = false;
+        $hasAppAccess = false;
+        foreach ($appColumns as $column) {
+            if (array_key_exists($column, $user)) {
+                $hasAppColumn = true;
+                $hasAppAccess = ((int) $user[$column]) === 1;
+                if ($hasAppAccess) {
+                    break;
+                }
+            }
+        }
+
+        if (!$hasAppColumn || !$hasAppAccess) {
+            return null;
+        }
+
+        $profile = Database::getPegawaiById($idPeg);
+        if (!$profile) {
+            return null;
+        }
+
+        $token = self::generateSimpegDbToken($idPeg, (string)($user['nama'] ?? $profile['full_name'] ?? ''), $app);
+        $sessionUser = self::buildSessionUser($token, $profile);
+        if (!$sessionUser) {
+            return null;
+        }
+
+        setAuthCookie($token);
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['user_data'] = $sessionUser;
+
+        return [
+            'token' => $token,
+            'user' => $sessionUser,
+        ];
+    }
+
     private static function getLocalAccessOverride(string $idPeg, array $local): ?array
     {
         if (empty($local['role'])) {
@@ -499,6 +566,22 @@ class AuthController
     public static function authenticateAndStoreSession(string $idPeg, string $password, ?string $app = null): array
     {
         $app = $app ?: env('SSO_APP', 'ims');
+        $authMode = self::normalizeText(env('SSO_AUTH_MODE', 'http'));
+
+        if ($authMode === 'db') {
+            $dbAuth = self::authenticateSimpegDb($idPeg, $password, $app);
+            if ($dbAuth) {
+                return $dbAuth;
+            }
+
+            $fallback = self::authenticateLocalFallback($idPeg, $password);
+            if ($fallback) {
+                return $fallback;
+            }
+
+            throw new RuntimeException('Login SSO DB gagal. Periksa user, password, dan akses aplikasi.', 401);
+        }
+
         $baseUrl = rtrim((string) env('SSO_BASE_URL', env('SIMPEG_BASE_URL', 'https://apisso.bkkjateng.co.id')), '/');
 
         $login = httpRequest('POST', $baseUrl . '/api/auth/login', [
@@ -511,6 +594,11 @@ class AuthController
             $fallback = self::authenticateLocalFallback($idPeg, $password);
             if ($fallback && (int)($login['status'] ?? 0) === 0) {
                 return $fallback;
+            }
+
+            $dbAuth = self::authenticateSimpegDb($idPeg, $password, $app);
+            if ($dbAuth && (int)($login['status'] ?? 0) === 0) {
+                return $dbAuth;
             }
 
             $message = $login['body']['message'] ?? 'Login SSO gagal';
@@ -540,6 +628,12 @@ class AuthController
 
     public static function fetchSsoUser(string $token): ?array
     {
+        $payload = self::decodeJwtPayload($token);
+        if (($payload['source'] ?? '') === 'sso_db') {
+            $idPeg = (string)($payload['id_peg'] ?? $payload['sub'] ?? '');
+            return $idPeg !== '' ? Database::getPegawaiById($idPeg) : null;
+        }
+
         $baseUrl = rtrim((string) env('SSO_BASE_URL', env('SIMPEG_BASE_URL', 'https://apisso.bkkjateng.co.id')), '/');
         $whoami = httpRequest('GET', $baseUrl . '/api/auth/whoami', null, [
             'Authorization: Bearer ' . $token,
@@ -572,6 +666,22 @@ class AuthController
         ]));
         $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'dummy-secret-key', true));
         
+        return "$header.$payload.$signature";
+    }
+
+    private static function generateSimpegDbToken(string $idPeg, string $nama, string $app): string
+    {
+        $header = base64_encode(json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
+        $payload = base64_encode(json_encode([
+            'id_peg' => $idPeg,
+            'nama' => $nama,
+            'app' => $app,
+            'source' => 'sso_db',
+            'iat' => time(),
+            'exp' => time() + (8 * 60 * 60),
+        ], JSON_UNESCAPED_UNICODE));
+        $signature = base64_encode(hash_hmac('sha256', "$header.$payload", env('SSO_DB_SECRET', 'SSO_BKK_SECRET_2026'), true));
+
         return "$header.$payload.$signature";
     }
 

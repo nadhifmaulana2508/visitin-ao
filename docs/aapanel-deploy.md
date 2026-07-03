@@ -21,6 +21,9 @@ SIMPEG_DB_PORT=3306
 
 SSO_BASE_URL=https://apisso.bkkjateng.co.id
 SSO_APP=ims
+SSO_AUTH_MODE=http
+SSO_DB_FALLBACK=false
+# SSO_DB_APP_COLUMN=ims
 HTTP_TIMEOUT=30
 HTTP_CONNECT_TIMEOUT=10
 HTTP_SSL_VERIFY=true
@@ -90,7 +93,28 @@ Jika Monbis memakai proxy internal, samakan proxy itu di:
 HTTP_PROXY=http://proxy-host:proxy-port
 ```
 
-## 5. Fallback akun demo sementara
+## 5. Mode SSO via DB SIMPEG
+
+Repo SSO `rest_api_sso` melakukan login langsung ke database SIMPEG (`tb_apk`, `tb_pegawai`, `tb_jabatan`, `tb_master_jabatan`, `tb_kantor`). Jika dari server aaPanel request ke `https://apisso.bkkjateng.co.id` timeout, tetapi database SIMPEG bisa diakses, gunakan mode ini:
+
+```env
+SSO_AUTH_MODE=db
+SSO_APP=ims
+SSO_DB_APP_COLUMN=ims
+```
+
+Mode `db` mengecek password dari `tb_apk.pass` dengan `password_verify`, mengecek akses aplikasi dari kolom app, lalu mengambil profil pegawai aktif dari SIMPEG. Jika kolom app di database berbeda, isi `SSO_DB_APP_COLUMN` sesuai nama kolomnya.
+
+Jika tetap ingin mencoba HTTP SSO dulu lalu fallback ke DB hanya saat koneksi timeout:
+
+```env
+SSO_AUTH_MODE=http
+SSO_DB_FALLBACK=true
+```
+
+Setelah mengubah `.env`, restart PHP-FPM dari aaPanel agar konfigurasi terbaca ulang.
+
+## 6. Fallback akun demo sementara
 
 Jika SSO belum bisa diakses dari server, akun demo bisa diizinkan login lokal sementara:
 

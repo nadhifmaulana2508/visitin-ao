@@ -852,6 +852,10 @@ class ProspectController
                 $stageStmt->execute([':id' => $pipeline['id']]);
                 $pipeline['documents'] = $docStmt->fetchAll();
                 $pipeline['stages'] = $stageStmt->fetchAll();
+                foreach ($pipeline['stages'] as &$stageRow) {
+                    $stageRow['analyst_name'] = $this->getEmployeeDisplayName($stageRow['analyst_employee_id'] ?? null);
+                }
+                unset($stageRow);
 
                 if (!empty($pipeline['sla_started_at'])) {
                     $slaStart = new DateTime($pipeline['sla_started_at']);
@@ -1476,6 +1480,7 @@ class ProspectController
         $user = $this->getCurrentUser();
         $prospectId = (int)($input['prospect_id'] ?? 0);
         $stage = strtoupper(trim($input['stage'] ?? ''));
+        $analystEmployeeId = trim((string)($input['analyst_employee_id'] ?? ''));
 
         if ($prospectId <= 0 || $stage === '') {
             sendResponse(400, 'prospect_id dan stage wajib diisi', null);
@@ -1510,6 +1515,17 @@ class ProspectController
         }
         if ($stage !== $nextStage) {
             sendResponse(400, "Tahap berikutnya harus {$nextStage}", null);
+        }
+        $this->ensureColumnExists('prospect_credit_pipeline_stages', 'analyst_employee_id', 'VARCHAR(20) DEFAULT NULL AFTER `attachment_uploaded_at`');
+        if ($stage === 'ANALISA') {
+            if ($analystEmployeeId === '') {
+                sendResponse(400, 'Analis cabang wajib dipilih untuk tahap Analisa', null);
+            }
+            $validAnalysts = Database::getPegawaiByKodeJabatan((string)$prospect['kode_kantor'], '92');
+            $validIds = array_column($validAnalysts, 'employee_id');
+            if (!in_array($analystEmployeeId, $validIds, true)) {
+                sendResponse(400, 'Analis cabang tidak valid untuk cabang prospek ini', null);
+            }
         }
 
         // Close previous open stage
@@ -1553,8 +1569,8 @@ class ProspectController
         }
 
         $ins = $this->db->prepare("INSERT INTO prospect_credit_pipeline_stages
-            (pipeline_id, prospect_id, stage, stage_started_at, sla_counted, attachment_url, attachment_type, attachment_uploaded_at, note, created_by)
-            VALUES (:pipeline_id, :pid, :stage, :started, 1, :attachment_url, :attachment_type, :attachment_uploaded_at, :note, :by)");
+            (pipeline_id, prospect_id, stage, stage_started_at, sla_counted, attachment_url, attachment_type, attachment_uploaded_at, analyst_employee_id, note, created_by)
+            VALUES (:pipeline_id, :pid, :stage, :started, 1, :attachment_url, :attachment_type, :attachment_uploaded_at, :analyst_employee_id, :note, :by)");
         $ins->execute([
             ':pipeline_id' => $pipeline['id'],
             ':pid' => $prospectId,
@@ -1563,6 +1579,7 @@ class ProspectController
             ':attachment_url' => $attachment['path'] ?? null,
             ':attachment_type' => $attachment['type'] ?? null,
             ':attachment_uploaded_at' => $attachment ? $now : null,
+            ':analyst_employee_id' => $stage === 'ANALISA' ? $analystEmployeeId : null,
             ':note' => $input['note'] ?? null,
             ':by' => $user['employee_id'] ?? '',
         ]);
@@ -1829,6 +1846,23 @@ class ProspectController
 
         $data = $this->attachAoWorkloads($this->getAoCandidates($kodeKantor, $groupJabatan, $tipe));
         sendResponse(200, 'OK', $data);
+    }
+
+    public function masterAnalisKredit(array $params): void
+    {
+        $kodeKantor = trim((string)($params['kode_kantor'] ?? ''));
+        if ($kodeKantor === '') {
+            sendResponse(400, 'kode_kantor wajib diisi', null);
+        }
+
+        try {
+            $data = Database::getPegawaiByKodeJabatan($kodeKantor, '92');
+            sendResponse(200, 'OK', $data);
+        } catch (\Exception $e) {
+            sendResponse(500, 'Gagal memuat analis cabang', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function getAoCandidates(?string $kodeKantor = null, ?string $groupJabatan = null, ?string $tipe = null): array

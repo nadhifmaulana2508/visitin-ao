@@ -242,6 +242,7 @@ CREATE TABLE IF NOT EXISTS `prospect_credit_pipeline_stages` (
     `attachment_url` VARCHAR(500) DEFAULT NULL,
     `attachment_type` VARCHAR(30) DEFAULT NULL,
     `attachment_uploaded_at` DATETIME DEFAULT NULL,
+    `analyst_employee_id` VARCHAR(20) DEFAULT NULL,
     `note` TEXT DEFAULT NULL,
     `created_by` VARCHAR(20) NOT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

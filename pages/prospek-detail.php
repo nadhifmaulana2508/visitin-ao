@@ -427,6 +427,13 @@ $prospect_id = $_GET['id'] ?? null;
                         <label class="form-label-custom">Catatan</label>
                         <input type="text" class="input-custom" name="note" placeholder="Catatan tahap...">
                     </div>
+                    <div class="mb-3" id="sla-stage-analyst-wrap" style="display:none;">
+                        <label class="form-label-custom">Analis Cabang <span class="text-danger">*</span></label>
+                        <select class="input-custom" name="analyst_employee_id" id="sla-stage-analyst">
+                            <option value="">-- Pilih analis cabang --</option>
+                        </select>
+                        <small class="text-muted d-block mt-1" style="font-size:0.65rem;">Staf Analis Kredit dan Appraisal sesuai cabang prospek.</small>
+                    </div>
                     <div class="mb-3" id="sla-stage-file-wrap" style="display:none;">
                         <label class="form-label-custom" id="sla-stage-file-label">Lampiran</label>
                         <input type="file" class="input-custom" name="attachment_file" id="sla-stage-file">
@@ -690,10 +697,11 @@ $prospect_id = $_GET['id'] ?? null;
             const attachment = s.attachment_url ? `<button type="button" class="icon-mini-btn view ms-2" title="Lihat detail" onclick="openFilePreview('${BASE_APP}/${s.attachment_url}', '${s.attachment_type || 'IMAGE'}', 'Detail ${stageLabels[s.stage]||s.stage}')"><i class="fa-solid ${s.attachment_type === 'PDF' ? 'fa-file-pdf' : 'fa-image'}"></i></button>` : '';
             const canUploadAttachment = canUpdateSlaUi(prospectData) && ['ANALISA','KOMITE'].includes(s.stage) && isWithinUploadWindow(s.attachment_uploaded_at);
             const uploadAttachment = canUploadAttachment ? `<button type="button" class="icon-mini-btn upload ms-2" title="Upload PDF" onclick="pickStageAttachment('${s.stage}')"><i class="fa-solid fa-upload"></i></button>` : '';
+            const analyst = s.stage === 'ANALISA' && s.analyst_employee_id ? `<div style="font-size:0.6rem;color:#64748B;"><i class="fa-solid fa-user-check me-1"></i>${escapeHtml(s.analyst_name || s.analyst_employee_id)} (${escapeHtml(s.analyst_employee_id)})</div>` : '';
             return `<div class="sla-stage">
                 <div class="sla-dot ${isDone ? 'done' : 'active'}"></div>
                 <div><div class="sla-stage-name">${stageLabels[s.stage]||s.stage}</div><div style="font-size:0.6rem;color:#94A3B8;">${fmtDate(s.stage_started_at)}${isDone?' → '+fmtDate(s.stage_ended_at):''}</div></div>
-                <div class="sla-stage-dur">${dur}</div>${attachment}${uploadAttachment}
+                ${analyst}<div class="sla-stage-dur">${dur}</div>${attachment}${uploadAttachment}
             </div>`;
         }).join('');
         document.getElementById('sla-current-stage').textContent = currentStage;
@@ -1148,10 +1156,15 @@ $prospect_id = $_GET['id'] ?? null;
         document.getElementById('sla-next-stage-value').value = stage || '';
         document.getElementById('sla-next-stage-label').textContent = stage ? stageLabelMap[stage] || stage : 'Tahap selesai';
         const wrap = document.getElementById('sla-stage-file-wrap');
+        const analystWrap = document.getElementById('sla-stage-analyst-wrap');
+        const analystSelect = document.getElementById('sla-stage-analyst');
         const input = document.getElementById('sla-stage-file');
         const label = document.getElementById('sla-stage-file-label');
         const hint = document.getElementById('sla-stage-file-hint');
         input.value = '';
+        analystSelect.value = '';
+        analystWrap.style.display = stage === 'ANALISA' ? 'block' : 'none';
+        if (stage === 'ANALISA') loadAnalisCabangOptions();
         if (stage === 'SURVEY') {
             wrap.style.display = 'block';
             input.accept = 'image/*';
@@ -1176,6 +1189,32 @@ $prospect_id = $_GET['id'] ?? null;
     }
     document.getElementById('modalSlaStage').addEventListener('show.bs.modal', syncStageFileInput);
 
+    async function loadAnalisCabangOptions() {
+        const sel = document.getElementById('sla-stage-analyst');
+        const kode = prospectData?.kode_kantor || '';
+        sel.innerHTML = '<option value="">Memuat analis...</option>';
+        if (!kode) {
+            sel.innerHTML = '<option value="">Kode cabang tidak ditemukan</option>';
+            return;
+        }
+
+        try {
+            const params = new URLSearchParams({ kode_kantor: kode });
+            const res = await fetch(BASE_APP + '/api/?action=master_analis_kredit&' + params.toString(), {credentials:'include'});
+            const body = await res.json();
+            const rows = body.status === 200 ? (body.data || []) : [];
+            if (!rows.length) {
+                sel.innerHTML = '<option value="">Analis cabang tidak ditemukan</option>';
+                return;
+            }
+            sel.innerHTML = '<option value="">-- Pilih analis cabang --</option>' + rows.map(a =>
+                `<option value="${escapeAttr(a.employee_id)}">${escapeHtml(a.full_name || a.employee_id)} (${escapeHtml(a.employee_id)})</option>`
+            ).join('');
+        } catch(e) {
+            sel.innerHTML = '<option value="">Gagal memuat analis</option>';
+        }
+    }
+
     document.getElementById('form-sla-stage').addEventListener('submit', async function(e) {
         e.preventDefault();
         const fd = new FormData(this);
@@ -1188,6 +1227,13 @@ $prospect_id = $_GET['id'] ?? null;
         if (payload.stage === 'SURVEY' && !attachment) {
             showToast('Foto survey wajib diupload', 'danger');
             return;
+        }
+        if (payload.stage === 'ANALISA') {
+            payload.analyst_employee_id = fd.get('analyst_employee_id');
+            if (!payload.analyst_employee_id) {
+                showToast('Pilih analis cabang dulu', 'danger');
+                return;
+            }
         }
         if (attachment) {
             try {

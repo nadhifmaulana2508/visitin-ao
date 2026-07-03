@@ -69,6 +69,9 @@ if (tableExists($db, 'prospect_credit_pipeline_stages')) {
     if (!columnExists($db, 'prospect_credit_pipeline_stages', 'attachment_uploaded_at')) {
         $db->exec("ALTER TABLE `prospect_credit_pipeline_stages` ADD COLUMN `attachment_uploaded_at` DATETIME DEFAULT NULL AFTER `attachment_type`");
     }
+    if (!columnExists($db, 'prospect_credit_pipeline_stages', 'analyst_employee_id')) {
+        $db->exec("ALTER TABLE `prospect_credit_pipeline_stages` ADD COLUMN `analyst_employee_id` VARCHAR(20) DEFAULT NULL AFTER `attachment_uploaded_at`");
+    }
 }
 
 $sql = file_get_contents(__DIR__ . '/create_tables_prospek.sql');

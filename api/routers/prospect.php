@@ -127,6 +127,12 @@ switch ($action) {
         (new ProspectController())->masterPegawaiAO($_GET);
         break;
 
+    case 'master_analis_kredit':
+        if ($request_method !== 'GET') sendResponse(405, 'Method harus GET', null);
+        $token = AuthMiddleware::require();
+        (new ProspectController())->masterAnalisKredit($_GET);
+        break;
+
     default:
         // Tidak match, kembalikan false agar index.php lanjut ke default
         return false;

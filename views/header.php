@@ -224,6 +224,40 @@ $menu_access = [
         .modal-dialog.modal-dialog-centered.modal-lg {
             max-width: min(900px, calc(100% - 30px));
         }
+        .modal-dialog {
+            max-height: calc(100dvh - 32px);
+        }
+        .modal-content {
+            max-height: calc(100dvh - 32px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header,
+        .modal-footer {
+            flex: 0 0 auto;
+        }
+        .modal-body {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .modal-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .modal-body::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 999px;
+        }
+        @media (max-width: 767px) {
+            .modal-dialog {
+                margin-top: 12px;
+                margin-bottom: calc(var(--nav-height) + var(--safe-bottom) + 12px);
+                max-height: calc(100dvh - var(--nav-height) - var(--safe-bottom) - 24px);
+            }
+            .modal-content {
+                max-height: calc(100dvh - var(--nav-height) - var(--safe-bottom) - 24px);
+            }
+        }
 
         .form-label-custom {
             font-size: 0.7rem; font-weight: 700; color: #64748B;

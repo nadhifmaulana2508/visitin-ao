@@ -585,7 +585,8 @@ class ProspectController
                     pc.id AS credit_pipeline_id,
                     pc.requested_loan_amount,
                     pc.current_stage AS credit_pipeline_stage,
-                    pc.pipeline_status AS credit_pipeline_status
+                    pc.pipeline_status AS credit_pipeline_status,
+                    DATEDIFF(NOW(), COALESCE(pc.sla_started_at, pc.confirmation_at, p.sla_started_at, p.assigned_at, p.created_at)) AS pipeline_days
                 FROM prospects p
                 " . $this->kodeKantorJoinSql('kk') . "
                 LEFT JOIN prospect_credit_pipelines pc ON pc.prospect_id = p.id

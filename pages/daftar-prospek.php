@@ -76,6 +76,19 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     .p-meta { font-size: 0.7rem; color: #64748B; display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
     .p-meta i { width: 14px; color: #A0AEC0; font-size: 0.65rem; }
     .p-amount { font-size: 0.78rem; font-weight: 800; color: #0F766E; margin-top: 6px; }
+    .pipeline-card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .pipeline-card-side { display: flex; flex-direction: column; gap: 3px; }
+    .pipeline-age {
+        align-self: flex-start; display: inline-flex; align-items: center; gap: 4px;
+        font-size: 0.62rem; font-weight: 800; color: #334155; background: #F1F5F9;
+        border-radius: 6px; padding: 4px 7px; margin-top: 2px;
+    }
+    @media (min-width: 768px) {
+        .prospek-card.pipeline-card { padding: 14px 16px; }
+        .pipeline-card-body { grid-template-columns: minmax(0, 1fr) minmax(170px, 0.78fr); align-items: start; column-gap: 14px; }
+        .pipeline-card-side { align-items: flex-start; padding-top: 2px; }
+        .pipeline-card .p-name { margin-bottom: 4px; }
+    }
 
     .pipeline-summary {
         display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
@@ -355,6 +368,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     const userAccessKorwil = <?= json_encode($user_access_korwil) ?>;
     const isPusat = <?= $is_pusat ? 'true' : 'false' ?>;
     const canDelegateProspek = <?= $can_delegate_prospek ? 'true' : 'false' ?>;
+    const isLoginAo = ['ao_kredit', 'ao_dana', 'ao_remedial'].includes(userRole);
 
     let currentPage = 1;
     let currentSource = urlSource || 'all';
@@ -422,6 +436,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     async function loadPipelineAoFilter() {
         const wrap = document.getElementById('filter-ao-wrap');
         if (!wrap || !isPipelineCredit) return;
+        if (isLoginAo) {
+            wrap.style.display = 'none';
+            fAo.value = '';
+            return;
+        }
 
         wrap.style.display = 'block';
         fAo.innerHTML = '<option value="">Semua AO</option>';
@@ -525,21 +544,28 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             const cabang = p.nama_kantor ? `${p.kode_kantor} - ${p.nama_kantor}` : p.kode_kantor;
             const selectable = canDelegateProspek && p.delegation_status === 'BELUM_DIDELEGASIKAN';
             const check = selectable ? `<input type="checkbox" class="bulk-check" aria-label="Pilih prospek" onclick="event.stopPropagation();" onchange="toggleBulkProspect(this, ${p.id})">` : '';
+            const stage = p.credit_pipeline_stage || p.credit_pipeline_status || (p.status === 'OPEN' ? 'Menunggu follow up' : '-');
             const pipelineInfo = isPipelineCredit ? `
                 <div class="p-amount"><i class="fa-solid fa-money-bill-wave me-1"></i>${p.requested_loan_amount ? formatRupiah(p.requested_loan_amount) : 'Belum ada nominal pengajuan'}</div>
                 <div class="p-meta"><i class="fa-solid fa-user-tie"></i>${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}</div>
-                <div class="p-meta"><i class="fa-solid fa-diagram-project"></i>${escapeHtml(p.credit_pipeline_stage || p.credit_pipeline_status || '-')}</div>
+                <div class="p-meta"><i class="fa-solid fa-diagram-project"></i>${escapeHtml(stage)}</div>
+                <div class="pipeline-age"><i class="fa-solid fa-clock"></i>${formatPipelineAge(p.pipeline_days)}</div>
             ` : '';
-            return `<a href="${BASE_APP}/prospek-detail/${p.id}" class="prospek-card ${typeClass} ${selectable ? 'selectable' : ''}" data-prospect-id="${p.id}">
+            const cardClass = `${typeClass} ${selectable ? 'selectable' : ''} ${isPipelineCredit ? 'pipeline-card' : ''}`;
+            return `<a href="${BASE_APP}/prospek-detail/${p.id}" class="prospek-card ${cardClass}" data-prospect-id="${p.id}">
                 ${check}
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <span class="badge-type ${typeBadge.cls}">${typeBadge.lbl}</span>
                     <div class="d-flex gap-1">${delBadge}${statusBadge}</div>
                 </div>
-                <div class="p-name">${p.customer_name}</div>
-                <div class="p-meta"><i class="fa-solid fa-box-open"></i>${p.rekomendasi_produk || '-'}</div>
-                <div class="p-meta"><i class="fa-solid fa-briefcase"></i>${p.jenis_usaha || '-'}</div>
-                ${pipelineInfo}
+                <div class="${isPipelineCredit ? 'pipeline-card-body' : ''}">
+                    <div>
+                        <div class="p-name">${p.customer_name}</div>
+                        <div class="p-meta"><i class="fa-solid fa-box-open"></i>${p.rekomendasi_produk || '-'}</div>
+                        <div class="p-meta"><i class="fa-solid fa-briefcase"></i>${p.jenis_usaha || '-'}</div>
+                    </div>
+                    ${isPipelineCredit ? `<div class="pipeline-card-side">${pipelineInfo}</div>` : pipelineInfo}
+                </div>
                 <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px solid #F4F7F6;">
                     <span class="p-meta mb-0"><i class="fa-solid fa-building"></i>${cabang}</span>
                     <span style="font-size:0.6rem;color:#94A3B8;">${formatDate(p.created_at)}</span>
@@ -820,6 +846,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     function formatDate(d) { if(!d) return '-'; return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
     function formatRupiah(n) { return new Intl.NumberFormat('id-ID', {style:'currency', currency:'IDR', maximumFractionDigits:0}).format(Number(n || 0)); }
     function formatAoName(id, name) { return name ? `${name} (${id || '-'})` : (id || 'Belum ada AO'); }
+    function formatPipelineAge(days) {
+        const n = Math.max(0, Number(days || 0));
+        if (n === 0) return 'Hari ini';
+        return `${n} hari proses`;
+    }
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
     }

@@ -174,7 +174,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
         <button class="ftab" data-source="mine">Prospek Saya</button>
         <button class="ftab" data-source="ao">Dari AO</button>
         <button class="ftab" data-source="non_ao">Dari Non-AO</button>
-        <?php if ($is_superuser): ?>
+        <?php if ($can_delegate_prospek): ?>
         <button class="ftab" data-source="pending">Belum Delegasi</button>
         <?php endif; ?>
     </div>
@@ -332,6 +332,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 
     // Pre-fill from URL params
     if (urlFilter === 'pending') currentSource = 'pending';
+    if (!canDelegateProspek && currentSource === 'pending') currentSource = 'all';
     if (urlFilter === 'sla') document.getElementById('f-status').value = 'SLA';
     if (urlType) document.getElementById('f-type').value = urlType;
 
@@ -382,6 +383,19 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     fKorwil.addEventListener('change', renderCabangFilter);
     const cabangReady = loadCabangFilter();
 
+    function isAdvancedFilterOpen() {
+        return document.getElementById('advanced-filter').open;
+    }
+
+    function appendAdvancedListFilters(params) {
+        if (!isAdvancedFilterOpen()) return;
+
+        if (fKorwil.value) params.set('korwil', fKorwil.value);
+        if (fCabang.value) params.set('kode_kantor', fCabang.value);
+        params.set('closing_date', document.getElementById('f-closing-date').value);
+        params.set('harian_date', document.getElementById('f-harian-date').value);
+    }
+
     // =========================================
     // VIEW SWITCH
     // =========================================
@@ -398,21 +412,16 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     // LOAD DATA (List)
     // =========================================
     window.loadData = async function() {
-        const advancedOpen = document.getElementById('advanced-filter').open;
+        const advancedOpen = isAdvancedFilterOpen();
         const params = new URLSearchParams({
             source: currentSource === 'pending' ? 'all' : currentSource,
             search: document.getElementById('f-search').value,
-            prospect_type: document.getElementById('f-type').value,
-            status: document.getElementById('f-status').value,
-            korwil: fKorwil.value,
-            kode_kantor: fCabang.value,
             page: currentPage,
             limit: 20,
         });
-        if (advancedOpen) {
-            params.set('closing_date', document.getElementById('f-closing-date').value);
-            params.set('harian_date', document.getElementById('f-harian-date').value);
-        }
+        if (advancedOpen || urlType) params.set('prospect_type', document.getElementById('f-type').value);
+        if (advancedOpen || urlFilter === 'sla') params.set('status', document.getElementById('f-status').value);
+        appendAdvancedListFilters(params);
         if (currentSource === 'pending') params.set('delegation', 'BELUM_DIDELEGASIKAN');
 
         try {
@@ -485,11 +494,8 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     async function loadSummaryStats() {
         const params = new URLSearchParams({
             source: currentSource === 'pending' ? 'all' : currentSource,
-            korwil: fKorwil.value,
-            kode_kantor: fCabang.value,
-            closing_date: document.getElementById('f-closing-date').value || '<?= $default_closing_date ?>',
-            harian_date: document.getElementById('f-harian-date').value || '<?= $default_harian ?>',
         });
+        appendAdvancedListFilters(params);
 
         try {
             const res = await fetch(BASE_APP + '/api/?action=prospect_report&' + params.toString(), {credentials:'include'});

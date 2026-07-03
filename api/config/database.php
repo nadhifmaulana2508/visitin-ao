@@ -217,10 +217,7 @@ class Database
             $where[] = "is_active = 1";
         }
 
-        if ($korwil !== null && $korwil !== '' && $korwil !== 'all' && in_array('korwil', $columns, true)) {
-            $where[] = "korwil = :korwil";
-            $params[':korwil'] = $korwil;
-        } elseif ($korwil !== null && $korwil !== '' && $korwil !== 'all') {
+        if ($korwil !== null && $korwil !== '' && $korwil !== 'all') {
             $codes = self::getKodeKantorCodesByKorwilName($korwil);
             if (!empty($codes)) {
                 $placeholders = [];
@@ -229,7 +226,13 @@ class Database
                     $placeholders[] = $key;
                     $params[$key] = $code;
                 }
-                $where[] = "kode_kantor IN (" . implode(',', $placeholders) . ")";
+                $kodeWhere = "kode_kantor IN (" . implode(',', $placeholders) . ")";
+                if (in_array('korwil', $columns, true)) {
+                    $where[] = "(korwil = :korwil OR {$kodeWhere})";
+                    $params[':korwil'] = $korwil;
+                } else {
+                    $where[] = $kodeWhere;
+                }
             } else {
                 $where[] = "1 = 0";
             }
@@ -249,7 +252,14 @@ class Database
 
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            if (empty($row['korwil'] ?? null)) {
+                $row['korwil'] = self::inferKorwilByKodeKantor((string)($row['kode_kantor'] ?? ''));
+            }
+        }
+        unset($row);
+        return $rows;
     }
 
     /**
@@ -272,6 +282,17 @@ class Database
             'pekalongan' => ['022', '023', '024', '025', '026', '027', '028'],
             default => [],
         };
+    }
+
+    public static function inferKorwilByKodeKantor(string $kodeKantor): ?string
+    {
+        $kode = (int) $kodeKantor;
+        if ($kodeKantor === '000') return 'pusat';
+        if ($kode >= 1 && $kode <= 7) return 'semarang';
+        if ($kode >= 8 && $kode <= 14) return 'solo';
+        if ($kode >= 15 && $kode <= 21) return 'banyumas';
+        if ($kode >= 22 && $kode <= 28) return 'pekalongan';
+        return null;
     }
 
     private static function getTableColumns(PDO $db, string $table): array

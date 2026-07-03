@@ -387,14 +387,12 @@ class AuthController
             return ['role' => 'ao_remedial', 'permissions' => ['AO_REMEDIAL_FE', 'AO_REMEDIAL_BE'], 'group_jabatan' => 'AO Remedial'];
         }
 
-        $isAreaKorwil = $unit === 'area kantor wilayah';
-        $isSuperuserUnit = in_array($unit, [
+        $isAreaKorwil = str_contains($unit, 'area kantor wilayah');
+        $isCentralSuperuserUnit = in_array($unit, [
             'divisi pemasaran',
             'divisi penyelesaian kredit',
-            'area kantor wilayah',
-            'dewan komisaris',
-            'direksi',
-        ], true);
+        ], true) || str_contains($unit, 'dewan komisaris') || str_contains($unit, 'direksi');
+        $isSuperuserUnit = $isCentralSuperuserUnit || $isAreaKorwil;
         $isBranchLeader = self::isBranchCode($kodeKantor) && (
             str_contains($job, 'kepala cabang')
             || str_contains($job, 'kepala bidang pemasaran')

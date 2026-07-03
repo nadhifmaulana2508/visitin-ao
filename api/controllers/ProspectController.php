@@ -297,11 +297,13 @@ class ProspectController
         $userPerms = $user['permissions'] ?? [];
         $userKodeKantor = $user['kode_kantor'] ?? '000';
         $userAccessKorwil = $user['access_korwil'] ?? null;
-        $userAccessKorwil = $user['access_korwil'] ?? null;
         $isBranchDelegator = preg_match('/^(00[1-9]|0[1-2][0-9]|028)$/', (string)$userKodeKantor) === 1;
 
         return $userRole === 'developer'
-            || ($userRole === 'superuser' && $isBranchDelegator && in_array('SUPERUSER_PROSPEK', $userPerms, true));
+            || ($userRole === 'superuser'
+                && !$userAccessKorwil
+                && $isBranchDelegator
+                && in_array('SUPERUSER_PROSPEK', $userPerms, true));
     }
 
     private function getAoActiveWorkloads(array $employeeIds): array
@@ -573,6 +575,7 @@ class ProspectController
         $userRole = $user['role'] ?? 'staff';
         $userPerms = $user['permissions'] ?? [];
         $userKodeKantor = $user['kode_kantor'] ?? '000';
+        $userAccessKorwil = $user['access_korwil'] ?? null;
 
         // Base query
         $sql = "SELECT p.*, kk.nama_kantor, kk.korwil FROM prospects p 

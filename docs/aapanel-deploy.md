@@ -24,6 +24,8 @@ SSO_APP=ims
 HTTP_TIMEOUT=30
 HTTP_CONNECT_TIMEOUT=10
 HTTP_SSL_VERIFY=true
+HTTP_IP_RESOLVE=4
+# HTTP_PROXY=http://proxy-host:proxy-port
 LOCAL_LOGIN_FALLBACK=false
 
 COOKIE_NAME=sso_token
@@ -68,12 +70,25 @@ Jalankan dari terminal aaPanel:
 
 ```bash
 curl -I --connect-timeout 10 https://apisso.bkkjateng.co.id/api/auth/whoami
+curl -4 -I --connect-timeout 10 https://apisso.bkkjateng.co.id/api/auth/whoami
 curl -X POST https://apisso.bkkjateng.co.id/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"id_peg":"102-119","password":"bkkjtg123","app":"ims"}'
 ```
 
 Jika `curl` timeout, masalahnya ada di outbound network server: firewall, DNS, routing, proxy, atau IP server belum diizinkan mengakses SSO.
+
+Jika `curl -4` berhasil tapi `curl` biasa timeout, pastikan `.env` berisi:
+
+```env
+HTTP_IP_RESOLVE=4
+```
+
+Jika Monbis memakai proxy internal, samakan proxy itu di:
+
+```env
+HTTP_PROXY=http://proxy-host:proxy-port
+```
 
 ## 5. Fallback akun demo sementara
 

@@ -24,7 +24,7 @@ class AuthMiddleware
             return;
         }
 
-        $sessionUser = AuthController::buildSessionUser($token, AuthController::fetchSsoUser($token));
+        $sessionUser = AuthController::buildSessionUser($token, AuthController::fetchLocalUserForToken($token));
         if (!$sessionUser) {
             return;
         }

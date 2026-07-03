@@ -325,4 +325,100 @@ function fillLogin(idPeg, password = 'bkkjtg123') {
     document.getElementById('input_id_peg').value = idPeg;
     document.getElementById('input_password').value = password;
 }
+
+(function () {
+    const form = document.getElementById('form-login');
+    const btn = document.getElementById('btn-login');
+    const alertBox = document.getElementById('login-alert');
+    const idInput = document.getElementById('input_id_peg');
+    const passwordInput = document.getElementById('input_password');
+    const baseApp = '<?= BASE_APP ?>';
+    const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const ssoBase = isLocal ? 'http://localhost/rest_api_sso' : 'https://apisso.bkkjateng.co.id';
+    const loginUrl = `${ssoBase}/api/auth/login`;
+    const whoamiUrl = `${ssoBase}/api/auth/whoami`;
+    const sessionUrl = `${baseApp}/api/?action=sso_session`;
+
+    function showLoginError(message) {
+        alertBox.innerHTML = `
+            <div class="alert alert-danger py-2 small mb-3" style="border-radius:8px; font-size:0.8rem;">
+                ${String(message || 'Login gagal').replace(/[&<>"']/g, c => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+                }[c]))}
+            </div>
+        `;
+    }
+
+    function setSSOCookie(token) {
+        const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toUTCString();
+        const domain = isLocal ? '' : 'domain=.bkkjateng.co.id;';
+        document.cookie = `sso_token=${encodeURIComponent(token)}; expires=${expires}; path=/; ${domain} SameSite=Lax`;
+    }
+
+    async function readJsonResponse(response) {
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (error) {
+            throw new Error(text || `HTTP ${response.status}`);
+        }
+    }
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const idPeg = idInput.value.trim();
+        const password = passwordInput.value;
+        if (!idPeg || !password) {
+            showLoginError('ID Pegawai dan password wajib diisi.');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Memeriksa...';
+        alertBox.innerHTML = '';
+
+        try {
+            const loginRes = await fetch(loginUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_peg: idPeg, password, app: 'ims' })
+            });
+            const loginJson = await readJsonResponse(loginRes);
+            if (loginJson?.status !== 200 || !loginJson?.data?.token) {
+                throw new Error(loginJson?.message || 'ID Pegawai atau password salah.');
+            }
+
+            const token = loginJson.data.token;
+            const whoamiRes = await fetch(whoamiUrl, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const whoamiJson = await readJsonResponse(whoamiRes);
+            if (whoamiJson?.status !== 200 || !whoamiJson?.data) {
+                throw new Error(whoamiJson?.message || 'Gagal mengambil profil SSO.');
+            }
+
+            const sessionRes = await fetch(sessionUrl, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, user: whoamiJson.data })
+            });
+            const sessionJson = await readJsonResponse(sessionRes);
+            if (sessionJson?.status !== 200) {
+                throw new Error(sessionJson?.message || 'Gagal menyimpan session aplikasi.');
+            }
+
+            setSSOCookie(token);
+            localStorage.setItem('visitin_token', token);
+            localStorage.setItem('visitin_user', JSON.stringify(sessionJson.data?.user || whoamiJson.data));
+            window.location.href = `${baseApp}/home`;
+        } catch (error) {
+            const failedFetch = String(error?.message || '').includes('Failed to fetch');
+            showLoginError(failedFetch ? 'Gagal terhubung ke server SSO. Pastikan API SSO bisa diakses dari browser.' : error.message);
+            btn.disabled = false;
+            btn.textContent = 'Login';
+        }
+    });
+})();
 </script>

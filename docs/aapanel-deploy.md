@@ -114,6 +114,8 @@ SSO_DB_FALLBACK=true
 
 Setelah mengubah `.env`, restart PHP-FPM dari aaPanel agar konfigurasi terbaca ulang.
 
+Catatan: halaman login Visitin juga mendukung pola seperti `report-dpk`, yaitu browser langsung memanggil API SSO lalu mengirim token ke aplikasi untuk dibuatkan session lokal. Karena itu timeout cURL dari server aaPanel tidak lagi menghambat login utama selama browser user bisa mengakses `https://apisso.bkkjateng.co.id`.
+
 ## 6. Fallback akun demo sementara
 
 Jika SSO belum bisa diakses dari server, akun demo bisa diizinkan login lokal sementara:

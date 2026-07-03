@@ -73,6 +73,13 @@ switch ($action) {
         (new AuthController())->whoami();
         break;
 
+    case 'sso_session':
+        if ($request_method !== 'POST') {
+            sendResponse(405, 'Method harus POST', null);
+        }
+        (new AuthController())->storeSsoSession(readJsonBody());
+        break;
+
     case 'logout':
         if ($request_method !== 'POST') {
             sendResponse(405, 'Method harus POST', null);

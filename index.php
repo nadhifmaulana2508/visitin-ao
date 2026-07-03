@@ -18,6 +18,8 @@ define('BASE_APP',
 require_once __DIR__ . '/api/config/env.php';
 require_once __DIR__ . '/api/helpers/http.php';
 require_once __DIR__ . '/api/helpers/cookie.php';
+require_once __DIR__ . '/api/helpers/response.php';
+require_once __DIR__ . '/api/config/database.php';
 require_once __DIR__ . '/api/controllers/AuthController.php';
 
 // =========================
@@ -27,12 +29,16 @@ require_once __DIR__ . '/api/controllers/AuthController.php';
 // Jika tidak ada cookie, JANGAN hapus session (karena login POST set session tanpa cookie).
 if (!empty($_COOKIE['sso_token'])) {
     $token = $_COOKIE['sso_token'];
-    $sessionUser = AuthController::buildSessionUser($token, AuthController::fetchSsoUser($token));
-    if ($sessionUser) {
-        $_SESSION['user_data'] = $sessionUser;
-    } else {
-        clearAuthCookie();
-        unset($_SESSION['user_data']);
+    $sessionToken = (string)($_SESSION['user_data']['token'] ?? '');
+
+    if ($sessionToken !== $token) {
+        $sessionUser = AuthController::buildSessionUser($token, AuthController::fetchLocalUserForToken($token));
+        if ($sessionUser) {
+            $_SESSION['user_data'] = $sessionUser;
+        } else {
+            clearAuthCookie();
+            unset($_SESSION['user_data']);
+        }
     }
 }
 // NOTE: Jika tidak ada cookie tapi session ada (dari POST login), biarkan session hidup.

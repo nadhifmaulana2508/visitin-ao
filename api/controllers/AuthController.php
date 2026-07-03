@@ -563,6 +563,44 @@ class AuthController
         ];
     }
 
+    public static function fetchLocalUserForToken(string $token): ?array
+    {
+        $payload = self::decodeJwtPayload($token);
+        if (!$payload) {
+            return null;
+        }
+
+        $idPeg = (string)($payload['id_peg'] ?? $payload['sub'] ?? $payload['employee_id'] ?? '');
+        if ($idPeg === '') {
+            return null;
+        }
+
+        try {
+            return Database::getPegawaiById($idPeg);
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    public static function storeTokenSession(string $token, ?array $ssoUser = null): array
+    {
+        $sessionUser = self::buildSessionUser($token, $ssoUser ?: self::fetchLocalUserForToken($token));
+        if (!$sessionUser) {
+            throw new RuntimeException('Token SSO tidak berisi id_peg yang valid', 401);
+        }
+
+        setAuthCookie($token);
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['user_data'] = $sessionUser;
+
+        return [
+            'token' => $token,
+            'user' => $sessionUser,
+        ];
+    }
+
     public static function authenticateAndStoreSession(string $idPeg, string $password, ?string $app = null): array
     {
         $app = $app ?: env('SSO_APP', 'ims');
@@ -606,23 +644,11 @@ class AuthController
         }
 
         $token = (string) $login['body']['data']['token'];
-        setAuthCookie($token);
-
-        $ssoUser = self::fetchSsoUser($token);
-        $sessionUser = self::buildSessionUser($token, $ssoUser);
-        if (!$sessionUser) {
-            clearAuthCookie();
-            throw new RuntimeException('Token SSO tidak berisi id_peg yang valid', 401);
-        }
-
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        $_SESSION['user_data'] = $sessionUser;
+        $auth = self::storeTokenSession($token, self::fetchSsoUser($token));
 
         return [
             'token' => $token,
-            'user' => $sessionUser,
+            'user' => $auth['user'],
         ];
     }
 
@@ -738,7 +764,7 @@ class AuthController
             sendResponse(401, 'Unauthorized', null);
         }
 
-        $ssoUser = self::fetchSsoUser($token);
+        $ssoUser = self::fetchLocalUserForToken($token) ?: self::fetchSsoUser($token);
         $sessionUser = self::buildSessionUser($token, $ssoUser);
         if (!$sessionUser) {
             clearAuthCookie();
@@ -764,6 +790,29 @@ class AuthController
             'role' => $sessionUser['role'],
             'permissions' => $sessionUser['permissions'],
         ]);
+    }
+
+    public function storeSsoSession(array $input): void
+    {
+        $token = trim((string)($input['token'] ?? ''));
+        $ssoUser = $input['user'] ?? ($input['sso_user'] ?? null);
+
+        if ($token === '') {
+            sendResponse(400, 'Token wajib diisi', null);
+        }
+        if ($ssoUser !== null && !is_array($ssoUser)) {
+            sendResponse(400, 'Data user tidak valid', null);
+        }
+
+        try {
+            $auth = self::storeTokenSession($token, $ssoUser);
+            sendResponse(200, 'Session SSO berhasil disimpan', [
+                'token' => $auth['token'],
+                'user' => $auth['user'],
+            ]);
+        } catch (RuntimeException $e) {
+            sendResponse((int)($e->getCode() ?: 401), $e->getMessage(), null);
+        }
     }
 
     /**

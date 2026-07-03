@@ -77,7 +77,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     .p-meta i { width: 14px; color: #A0AEC0; font-size: 0.65rem; flex: 0 0 14px; }
     .meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .p-amount { font-size: 0.78rem; font-weight: 800; color: #0F766E; }
-    .pipeline-card-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(94px, 0.82fr); gap: 10px; align-items: start; }
+    .pipeline-card-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(88px, 0.72fr); gap: 10px; align-items: start; }
     .pipeline-card-main, .pipeline-card-side { min-width: 0; }
     .pipeline-card-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
     .pipeline-card .p-name {
@@ -88,10 +88,16 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     .pipeline-card-side .p-meta { justify-content: flex-end; text-align: right; }
     .pipeline-card-side .meta-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .pipeline-age {
-        align-self: flex-end; display: inline-flex; align-items: center; gap: 4px;
+        align-self: flex-start; display: inline-flex; align-items: center; gap: 4px;
         font-size: 0.62rem; font-weight: 800; color: #334155; background: #F1F5F9;
         border-radius: 6px; padding: 4px 7px; margin-top: 2px;
     }
+    .pipeline-percent {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 42px; align-self: flex-end; border-radius: 999px; padding: 3px 7px;
+        background: #ECFDF5; color: #047857; font-size: 0.62rem; font-weight: 900;
+    }
+    .pipeline-summary-percent { font-size: 0.66rem; color: #64748B; font-weight: 800; margin-top: 2px; }
     @media (min-width: 768px) {
         .prospek-card.pipeline-card { padding: 14px 16px; }
         .pipeline-card-body { grid-template-columns: minmax(0, 1fr) minmax(170px, 0.78fr); column-gap: 14px; }
@@ -209,6 +215,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     <div class="pipeline-summary-card">
         <div class="pipeline-summary-label">Realisasi Kredit</div>
         <div class="pipeline-summary-value" id="pipeline-realisasi">Rp0</div>
+        <div class="pipeline-summary-percent" id="pipeline-percent">0% dari pipeline</div>
     </div>
 </div>
 
@@ -554,11 +561,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             const check = selectable ? `<input type="checkbox" class="bulk-check" aria-label="Pilih prospek" onclick="event.stopPropagation();" onchange="toggleBulkProspect(this, ${p.id})">` : '';
             const stage = p.credit_pipeline_stage || p.credit_pipeline_status || (p.status === 'OPEN' ? 'Menunggu follow up' : '-');
             const amountText = p.requested_loan_amount ? formatRupiah(p.requested_loan_amount) : '-';
+            const realizationPercent = calcPercent(p.closing_realization_amount, p.requested_loan_amount);
             const pipelineInfo = isPipelineCredit ? `
                 <div class="p-amount"><i class="fa-solid fa-money-bill-wave me-1"></i>${amountText}</div>
                 <div class="p-meta" title="${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}"><i class="fa-solid fa-user-tie"></i><span class="meta-text">${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}</span></div>
-                <div class="p-meta"><i class="fa-solid fa-diagram-project"></i><span class="meta-text">${escapeHtml(stage)}</span></div>
-                <div class="pipeline-age"><i class="fa-solid fa-clock"></i>${formatPipelineAge(p.pipeline_days)}</div>
+                <div class="pipeline-percent">${realizationPercent}%</div>
             ` : '';
             const cardClass = `${typeClass} ${selectable ? 'selectable' : ''} ${isPipelineCredit ? 'pipeline-card' : ''}`;
             return `<a href="${BASE_APP}/prospek-detail/${p.id}" class="prospek-card ${cardClass}" data-prospect-id="${p.id}">
@@ -572,6 +579,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
                         <div class="p-name" title="${escapeHtml(p.customer_name || '-')}">${escapeHtml(p.customer_name || '-')}</div>
                         <div class="p-meta"><i class="fa-solid fa-box-open"></i><span class="meta-text">${escapeHtml(p.rekomendasi_produk || '-')}</span></div>
                         <div class="p-meta"><i class="fa-solid fa-briefcase"></i><span class="meta-text">${escapeHtml(p.jenis_usaha || '-')}</span></div>
+                        ${isPipelineCredit ? `<div class="p-meta"><i class="fa-solid fa-diagram-project"></i><span class="meta-text">${escapeHtml(stage)}</span></div><div class="pipeline-age"><i class="fa-solid fa-clock"></i>${formatPipelineAge(p.pipeline_days)}</div>` : ''}
                     </div>
                     ${isPipelineCredit ? `<div class="pipeline-card-side">${pipelineInfo}</div>` : pipelineInfo}
                 </div>
@@ -616,6 +624,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             if (isPipelineCredit) {
                 document.getElementById('pipeline-pengajuan').textContent = formatRupiah(s.total_pipeline_pengajuan || 0);
                 document.getElementById('pipeline-realisasi').textContent = formatRupiah(s.total_pipeline_realisasi || 0);
+                document.getElementById('pipeline-percent').textContent = calcPercent(s.total_pipeline_realisasi, s.total_pipeline_pengajuan) + '% dari pipeline';
             }
         } catch(e) {}
     }
@@ -855,6 +864,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     function formatDate(d) { if(!d) return '-'; return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
     function formatRupiah(n) { return new Intl.NumberFormat('id-ID', {style:'currency', currency:'IDR', maximumFractionDigits:0}).format(Number(n || 0)); }
     function formatAoName(id, name) { return name ? `${name} (${id || '-'})` : (id || 'Belum ada AO'); }
+    function calcPercent(realization, pipeline) {
+        const base = Number(pipeline || 0);
+        if (base <= 0) return 0;
+        return Math.round((Number(realization || 0) / base) * 100);
+    }
     function formatPipelineAge(days) {
         const n = Math.max(0, Number(days || 0));
         if (n === 0) return 'Hari ini';

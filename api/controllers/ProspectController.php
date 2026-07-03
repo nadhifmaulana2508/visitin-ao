@@ -1353,6 +1353,13 @@ class ProspectController
 
         // Validasi closing sesuai produk
         if ($type === 'KREDIT' || $type === 'DEBITUR_EXISTING') {
+            $pipelineStmt = $this->db->prepare("SELECT current_stage FROM prospect_credit_pipelines WHERE prospect_id = :pid LIMIT 1");
+            $pipelineStmt->execute([':pid' => $prospectId]);
+            $pipeline = $pipelineStmt->fetch();
+            if (($pipeline['current_stage'] ?? '') !== 'KOMITE') {
+                sendResponse(400, 'Closing kredit baru bisa dilakukan setelah tahap Komite', null);
+            }
+
             $accountNum = trim($input['closing_account_number'] ?? '');
             $amount = (int)($input['closing_realization_amount'] ?? 0);
             if ($accountNum === '') sendResponse(400, 'Closing kredit wajib input nomor rekening', null);
@@ -1867,6 +1874,15 @@ class ProspectController
 
     private function getAoCandidates(?string $kodeKantor = null, ?string $groupJabatan = null, ?string $tipe = null): array
     {
+        try {
+            $dbCandidates = Database::getPegawaiAo($kodeKantor, $groupJabatan, $tipe);
+            if (!empty($dbCandidates)) {
+                return $dbCandidates;
+            }
+        } catch (\Exception $e) {
+            // Lanjut coba SSO/dummy di bawah.
+        }
+
         $token = AuthMiddleware::getToken();
         if ($token && $kodeKantor) {
             $ssoData = $this->getAoCandidatesFromSso($token, $kodeKantor, $groupJabatan, $tipe);

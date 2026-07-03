@@ -165,6 +165,58 @@ class Database
         return $stmt->fetchAll();
     }
 
+    public static function getPegawaiAo(?string $kodeKantor = null, ?string $groupJabatan = null, ?string $tipe = null): array
+    {
+        $db = self::getSimpeg();
+
+        $sql = "SELECT
+                    k.kode_cabang AS kode_kantor,
+                    j.id_peg AS employee_id,
+                    p.nama AS full_name,
+                    p.nip AS nik,
+                    p.email,
+                    p.telp,
+                    j.unit_kerja AS kode_unit_kerja,
+                    k.nama_kantor AS branch_name,
+                    mj.nama_unit_kerja AS unit_kerja,
+                    mj.nama_jabatan AS job_position,
+                    mj.level,
+                    mj.group_jabatan
+                FROM tb_jabatan j
+                INNER JOIN tb_pegawai p ON j.id_peg = p.id_peg
+                INNER JOIN tb_master_jabatan mj ON CAST(j.kode_jabatan AS CHAR) = CAST(mj.kode_jabatan AS CHAR)
+                LEFT JOIN tb_kantor k ON j.unit_kerja = k.kode_kantor_detail
+                WHERE j.status_jab = 'Aktif'";
+
+        $params = [];
+
+        if ($kodeKantor !== null && $kodeKantor !== '') {
+            $sql .= " AND k.kode_cabang = :kode_kantor";
+            $params[':kode_kantor'] = $kodeKantor;
+        }
+
+        $needle = strtolower(trim((string)($tipe ?: $groupJabatan)));
+        if ($needle !== '') {
+            if (str_contains($needle, 'kredit')) {
+                $sql .= " AND (LOWER(mj.group_jabatan) LIKE '%kredit%' OR LOWER(mj.nama_jabatan) LIKE '%kredit%')";
+            } elseif (str_contains($needle, 'dana')) {
+                $sql .= " AND (LOWER(mj.group_jabatan) LIKE '%dana%' OR LOWER(mj.nama_jabatan) LIKE '%dana%')";
+            } elseif (str_contains($needle, 'remedial')) {
+                $sql .= " AND (LOWER(mj.group_jabatan) LIKE '%remedial%' OR LOWER(mj.nama_jabatan) LIKE '%remedial%')";
+            } elseif ($groupJabatan !== null && $groupJabatan !== '') {
+                $sql .= " AND mj.group_jabatan = :group_jabatan";
+                $params[':group_jabatan'] = $groupJabatan;
+            }
+        }
+
+        $sql .= " AND (LOWER(mj.group_jabatan) LIKE '%ao%' OR LOWER(mj.nama_jabatan) LIKE '%account officer%' OR LOWER(mj.nama_jabatan) LIKE 'ao %' OR LOWER(mj.nama_jabatan) LIKE '% ao %')
+                  ORDER BY p.nama ASC";
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public static function getPegawaiByKodeJabatan(?string $kodeKantor, string $kodeJabatan): array
     {
         $db = self::getSimpeg();

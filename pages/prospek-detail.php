@@ -825,6 +825,7 @@ $prospect_id = $_GET['id'] ?? null;
             const isCredit = p.prospect_type === 'KREDIT' || p.prospect_type === 'DEBITUR_EXISTING';
             const hasCreditPipeline = !!p.credit_pipeline;
             const docsComplete = !!p.credit_pipeline?.documents_completed_at;
+            const isCreditAtKomite = isCredit && p.status === 'SLA' && p.credit_pipeline?.current_stage === 'KOMITE';
             html += `<button class="action-btn btn-follow-up" data-bs-toggle="modal" data-bs-target="#modalFollowUp"><i class="fa-solid fa-phone-volume me-2"></i>Input Follow Up</button>`;
 
             if (isCredit && !hasCreditPipeline) {
@@ -843,7 +844,7 @@ $prospect_id = $_GET['id'] ?? null;
                 }
             }
 
-            if ((!isCredit && ['FOLLOW_UP','SLA'].includes(p.status)) || (isCredit && p.status === 'SLA')) {
+            if ((!isCredit && ['FOLLOW_UP','SLA'].includes(p.status)) || isCreditAtKomite) {
                 html += `<button class="action-btn btn-closing" data-bs-toggle="modal" data-bs-target="#modalClosing"><i class="fa-solid fa-check-double me-2"></i>Closing</button>`;
             }
 

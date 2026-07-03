@@ -526,7 +526,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             const selectable = canDelegateProspek && p.delegation_status === 'BELUM_DIDELEGASIKAN';
             const check = selectable ? `<input type="checkbox" class="bulk-check" aria-label="Pilih prospek" onclick="event.stopPropagation();" onchange="toggleBulkProspect(this, ${p.id})">` : '';
             const pipelineInfo = isPipelineCredit ? `
-                <div class="p-amount"><i class="fa-solid fa-money-bill-wave me-1"></i>${formatRupiah(p.requested_loan_amount || 0)}</div>
+                <div class="p-amount"><i class="fa-solid fa-money-bill-wave me-1"></i>${p.requested_loan_amount ? formatRupiah(p.requested_loan_amount) : 'Belum ada nominal pengajuan'}</div>
                 <div class="p-meta"><i class="fa-solid fa-user-tie"></i>${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}</div>
                 <div class="p-meta"><i class="fa-solid fa-diagram-project"></i>${escapeHtml(p.credit_pipeline_stage || p.credit_pipeline_status || '-')}</div>
             ` : '';

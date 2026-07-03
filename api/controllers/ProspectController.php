@@ -677,7 +677,9 @@ class ProspectController
         }
 
         if ($isPipelineCredit) {
-            $sql .= " AND pc.id IS NOT NULL AND p.prospect_type IN ('KREDIT','DEBITUR_EXISTING')";
+            $sql .= " AND p.prospect_type IN ('KREDIT','DEBITUR_EXISTING')
+                AND p.delegation_status = 'SUDAH_DIDELEGASIKAN'
+                AND COALESCE(p.assigned_to, '') <> ''";
         }
 
         $filterAssignedTo = trim((string)($params['assigned_to'] ?? ''));
@@ -1716,7 +1718,9 @@ class ProspectController
 
         $pipelineWhere = "";
         if ($isPipelineCredit) {
-            $pipelineWhere .= " AND pc.id IS NOT NULL AND p.prospect_type IN ('KREDIT','DEBITUR_EXISTING')";
+            $pipelineWhere .= " AND p.prospect_type IN ('KREDIT','DEBITUR_EXISTING')
+                AND p.delegation_status = 'SUDAH_DIDELEGASIKAN'
+                AND COALESCE(p.assigned_to, '') <> ''";
         }
 
         $assignedTo = trim((string)($params['assigned_to'] ?? ''));

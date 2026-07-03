@@ -13,6 +13,7 @@ $is_ao_dana = in_array('AO_DANA', $perms) || $is_developer;
 $is_ao_remedial = (in_array('AO_REMEDIAL_FE', $perms) || in_array('AO_REMEDIAL_BE', $perms)) || $is_developer;
 $is_ao = $is_ao_kredit || $is_ao_dana || $is_ao_remedial;
 $is_pusat = ($kodeKantor === '000');
+$can_view_pipeline_kredit = $is_ao_kredit || $is_superuser;
 
 $can_access_prospek = (bool)($menu['can_access_prospek'] ?? true);
 $can_input_prospek = (bool)($menu['can_input_prospek'] ?? true);
@@ -140,7 +141,7 @@ $can_access_history = (bool)($menu['can_access_history'] ?? true);
         </a>
         <?php endif; ?>
 
-        <?php if ($is_ao_kredit): ?>
+        <?php if ($can_view_pipeline_kredit): ?>
         <a href="<?= BASE_APP ?>/daftar-prospek?filter=sla" class="menu-card">
             <div class="menu-icon-wrapper icon-orange"><i class="fa-solid fa-chart-line"></i></div>
             <span class="menu-title">Pipeline Kredit</span>

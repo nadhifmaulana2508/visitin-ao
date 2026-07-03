@@ -24,6 +24,7 @@ SSO_APP=ims
 HTTP_TIMEOUT=30
 HTTP_CONNECT_TIMEOUT=10
 HTTP_SSL_VERIFY=true
+LOCAL_LOGIN_FALLBACK=false
 
 COOKIE_NAME=sso_token
 COOKIE_DOMAIN=.bkkjateng.co.id
@@ -74,3 +75,16 @@ curl -X POST https://apisso.bkkjateng.co.id/api/auth/login \
 
 Jika `curl` timeout, masalahnya ada di outbound network server: firewall, DNS, routing, proxy, atau IP server belum diizinkan mengakses SSO.
 
+## 5. Fallback akun demo sementara
+
+Jika SSO belum bisa diakses dari server, akun demo bisa diizinkan login lokal sementara:
+
+```env
+LOCAL_LOGIN_FALLBACK=true
+```
+
+Fallback ini hanya dipakai saat koneksi SSO gagal total dan password harus cocok dengan daftar akun demo di aplikasi. Untuk production penuh, set kembali:
+
+```env
+LOCAL_LOGIN_FALLBACK=false
+```

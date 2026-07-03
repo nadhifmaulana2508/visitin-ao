@@ -281,6 +281,36 @@ class AuthController
         return $users[$idPeg]['data'] ?? null;
     }
 
+    private static function authenticateLocalFallback(string $idPeg, string $password): ?array
+    {
+        if (!env_bool('LOCAL_LOGIN_FALLBACK', false)) {
+            return null;
+        }
+
+        $users = self::getDummyUsers();
+        if (empty($users[$idPeg]) || !hash_equals((string)($users[$idPeg]['password'] ?? ''), $password)) {
+            return null;
+        }
+
+        $local = $users[$idPeg]['data'];
+        $token = self::generateDummyToken($local);
+        $sessionUser = self::buildSessionUser($token, $local);
+        if (!$sessionUser) {
+            return null;
+        }
+
+        setAuthCookie($token);
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['user_data'] = $sessionUser;
+
+        return [
+            'token' => $token,
+            'user' => $sessionUser,
+        ];
+    }
+
     private static function getLocalAccessOverride(string $idPeg, array $local): ?array
     {
         if (empty($local['role'])) {
@@ -478,6 +508,11 @@ class AuthController
         ]);
 
         if (($login['status'] ?? 0) !== 200 || empty($login['body']['data']['token'])) {
+            $fallback = self::authenticateLocalFallback($idPeg, $password);
+            if ($fallback && (int)($login['status'] ?? 0) === 0) {
+                return $fallback;
+            }
+
             $message = $login['body']['message'] ?? 'Login SSO gagal';
             throw new RuntimeException($message, (int) ($login['status'] ?: 401));
         }

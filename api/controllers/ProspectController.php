@@ -1332,6 +1332,118 @@ class ProspectController
         sendResponse(400, 'Target upload tidak valid', null);
     }
 
+    private function normalizeAccountNumber(?string $accountNumber): string
+    {
+        return preg_replace('/\s+/', '', trim((string) $accountNumber));
+    }
+
+    private function getCreditRealizationByAccount(string $accountNumber): ?array
+    {
+        $accountNumber = $this->normalizeAccountNumber($accountNumber);
+        if ($accountNumber === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare("SELECT
+                r.kode_kantor,
+                r.no_rekening,
+                r.nasabah_id,
+                r.nama_nasabah,
+                r.alamat,
+                r.realisasi_pokok,
+                r.tanggal_realisasi,
+                r.jml_angsuran,
+                r.suku_bunga_per_tahun,
+                r.kode_produk,
+                pk.nama_produk
+            FROM update_realisasi_kredit r
+            LEFT JOIN produk_kredit pk ON CAST(pk.kode_produk AS CHAR) = CAST(r.kode_produk AS CHAR)
+            WHERE r.no_rekening = :rekening
+            ORDER BY r.tanggal_realisasi DESC, r.kretrans_id DESC
+            LIMIT 1");
+        $stmt->execute([':rekening' => $accountNumber]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            return null;
+        }
+
+        return [
+            'kode_kantor' => (string)($row['kode_kantor'] ?? ''),
+            'no_rekening' => (string)($row['no_rekening'] ?? ''),
+            'nasabah_id' => (string)($row['nasabah_id'] ?? ''),
+            'nama_nasabah' => (string)($row['nama_nasabah'] ?? ''),
+            'alamat' => (string)($row['alamat'] ?? ''),
+            'realisasi_pokok' => (int) round((float)($row['realisasi_pokok'] ?? 0)),
+            'tanggal_realisasi' => $row['tanggal_realisasi'] ?? null,
+            'jml_angsuran' => (int)($row['jml_angsuran'] ?? 0),
+            'suku_bunga_per_tahun' => (float)($row['suku_bunga_per_tahun'] ?? 0),
+            'kode_produk' => (string)($row['kode_produk'] ?? ''),
+            'nama_produk' => (string)($row['nama_produk'] ?? ''),
+        ];
+    }
+
+    private function findClosedProspectByAccount(string $accountNumber, int $exceptProspectId = 0): ?array
+    {
+        $accountNumber = $this->normalizeAccountNumber($accountNumber);
+        if ($accountNumber === '') {
+            return null;
+        }
+
+        $sql = "SELECT id, customer_name, assigned_to, closed_at
+            FROM prospects
+            WHERE closing_account_number = :rekening
+              AND status = 'CLOSING'";
+        $params = [':rekening' => $accountNumber];
+
+        if ($exceptProspectId > 0) {
+            $sql .= " AND id <> :id";
+            $params[':id'] = $exceptProspectId;
+        }
+
+        $sql .= " ORDER BY closed_at DESC, id DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
+
+    public function closingLookup(array $params): void
+    {
+        $user = $this->getCurrentUser();
+        $prospectId = (int)($params['prospect_id'] ?? 0);
+        $accountNumber = $this->normalizeAccountNumber($params['no_rekening'] ?? '');
+
+        if ($prospectId <= 0 || $accountNumber === '') {
+            sendResponse(400, 'prospect_id dan no_rekening wajib diisi', null);
+        }
+
+        $stmt = $this->db->prepare("SELECT * FROM prospects WHERE id = :id");
+        $stmt->execute([':id' => $prospectId]);
+        $prospect = $stmt->fetch();
+        if (!$prospect) sendResponse(404, 'Prospek tidak ditemukan', null);
+        if (!$this->canAccessProspect($prospect, $user)) {
+            sendResponse(403, 'Anda tidak punya akses ke prospek ini', null);
+        }
+
+        $used = $this->findClosedProspectByAccount($accountNumber, $prospectId);
+        if ($used) {
+            sendResponse(409, 'Nomor rekening sudah digunakan untuk closing prospek lain', [
+                'used_by_prospect_id' => (int)$used['id'],
+                'used_by_customer' => $used['customer_name'] ?? '',
+                'closed_at' => $used['closed_at'] ?? null,
+            ]);
+        }
+
+        $realization = $this->getCreditRealizationByAccount($accountNumber);
+        if (!$realization) {
+            sendResponse(404, 'Nomor rekening tidak ditemukan di data realisasi kredit', null);
+        }
+
+        sendResponse(200, 'OK', $realization);
+    }
+
 
     // =========================================================
     // CLOSE PROSPECT
@@ -1361,14 +1473,37 @@ class ProspectController
             }
 
             $accountNum = trim($input['closing_account_number'] ?? '');
-            $amount = (int)($input['closing_realization_amount'] ?? 0);
             if ($accountNum === '') sendResponse(400, 'Closing kredit wajib input nomor rekening', null);
+            $used = $this->findClosedProspectByAccount($accountNum, $prospectId);
+            if ($used) {
+                sendResponse(409, 'Nomor rekening sudah digunakan untuk closing prospek lain', [
+                    'used_by_prospect_id' => (int)$used['id'],
+                    'used_by_customer' => $used['customer_name'] ?? '',
+                ]);
+            }
+
+            $realization = $this->getCreditRealizationByAccount($accountNum);
+            if (!$realization) {
+                sendResponse(404, 'Nomor rekening tidak ditemukan di data realisasi kredit', null);
+            }
+
+            $input['closing_account_number'] = $realization['no_rekening'];
+            $input['closing_realization_amount'] = $realization['realisasi_pokok'];
+            $input['closing_tenor'] = $realization['jml_angsuran'];
+            $amount = (int)($input['closing_realization_amount'] ?? 0);
             if ($amount <= 0) sendResponse(400, 'Closing kredit wajib input nominal realisasi pencairan', null);
             if ($prospect['status'] !== 'SLA') sendResponse(400, 'Closing kredit dilakukan setelah masuk SLA/pipeline kredit', null);
         } elseif ($type === 'TABUNGAN' || $type === 'DEPOSITO') {
             $accountNum = trim($input['closing_account_number'] ?? '');
             $amount = (int)($input['closing_realization_amount'] ?? 0);
             if ($accountNum === '') sendResponse(400, 'Closing tabungan/deposito wajib input nomor rekening', null);
+            $used = $this->findClosedProspectByAccount($accountNum, $prospectId);
+            if ($used) {
+                sendResponse(409, 'Nomor rekening sudah digunakan untuk closing prospek lain', [
+                    'used_by_prospect_id' => (int)$used['id'],
+                    'used_by_customer' => $used['customer_name'] ?? '',
+                ]);
+            }
             if ($amount <= 0) sendResponse(400, 'Closing tabungan/deposito wajib input nominal setoran/deposito', null);
         } elseif ($type === 'PEMBELI_ASET') {
             $buyer = trim($input['closing_buyer_name'] ?? '');

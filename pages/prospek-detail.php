@@ -315,6 +315,26 @@ $prospect_id = $_GET['id'] ?? null;
                     <div class="mb-3">
                         <label class="form-label-custom">Nomor Rekening <span class="text-danger">*</span></label>
                         <input type="text" class="input-custom" name="closing_account_number" placeholder="Nomor rekening realisasi" required>
+                        <div id="closing-account-hint" class="small mt-2" style="font-size:0.7rem;color:#64748B;">Ketik nomor rekening untuk mengambil data realisasi.</div>
+                    </div>
+                    <div id="closing-realization-preview" class="mb-3" style="display:none;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:12px;">
+                        <div class="d-flex justify-content-between gap-2 mb-2">
+                            <span style="font-size:0.65rem;font-weight:800;color:#64748B;text-transform:uppercase;">Nasabah</span>
+                            <span id="closing-lookup-name" style="font-size:0.78rem;font-weight:800;color:#0A1931;text-align:right;">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between gap-2 mb-2">
+                            <span style="font-size:0.65rem;font-weight:800;color:#64748B;text-transform:uppercase;">Produk</span>
+                            <span id="closing-lookup-product" style="font-size:0.74rem;font-weight:700;color:#334155;text-align:right;">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between gap-2 mb-2">
+                            <span style="font-size:0.65rem;font-weight:800;color:#64748B;text-transform:uppercase;">Realisasi</span>
+                            <span id="closing-lookup-amount" style="font-size:0.82rem;font-weight:900;color:#00796B;text-align:right;">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between gap-2 mb-2">
+                            <span style="font-size:0.65rem;font-weight:800;color:#64748B;text-transform:uppercase;">Tanggal Realisasi</span>
+                            <span id="closing-lookup-date" style="font-size:0.74rem;font-weight:700;color:#334155;text-align:right;">-</span>
+                        </div>
+                        <div style="font-size:0.68rem;color:#64748B;line-height:1.35;" id="closing-lookup-address">-</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label-custom">Nominal Realisasi (Rp) <span class="text-danger">*</span></label>
@@ -533,6 +553,11 @@ $prospect_id = $_GET['id'] ?? null;
         return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
     }
 
+    function formatRupiah(value) {
+        const amount = Number(value || 0);
+        return amount ? 'Rp ' + amount.toLocaleString('id-ID') : '-';
+    }
+
     function formatEmployee(id, name) {
         if (name && id) return `${name} (${id})`;
         return name || id || '-';
@@ -631,20 +656,32 @@ $prospect_id = $_GET['id'] ?? null;
         const account = document.querySelector('#form-closing [name="closing_account_number"]');
         const amount = document.querySelector('#form-closing [name="closing_realization_amount"]');
         const tenorField = document.getElementById('closing-tenor-field');
+        const tenor = document.querySelector('#form-closing [name="closing_tenor"]');
+        const accountHint = document.getElementById('closing-account-hint');
+        const realizationPreview = document.getElementById('closing-realization-preview');
         const buyer = document.querySelector('#form-closing [name="closing_buyer_name"]');
         const method = document.querySelector('#form-closing [name="closing_asset_purchase_method"]');
         if (account) {
             account.required = isCredit || isDana;
             account.closest('.mb-3').style.display = isAsset ? 'none' : 'block';
             account.placeholder = isDana ? 'Nomor rekening tabungan/deposito' : 'Nomor rekening realisasi';
+            account.dataset.lookupEnabled = isCredit ? '1' : '0';
+            if (accountHint) {
+                accountHint.style.display = isCredit ? 'block' : 'none';
+                accountHint.textContent = isCredit ? 'Ketik nomor rekening untuk mengambil data realisasi.' : '';
+                accountHint.style.color = '#64748B';
+            }
         }
         if (amount) {
             amount.required = isCredit || isDana;
             amount.closest('.mb-3').style.display = isAsset ? 'none' : 'block';
             amount.min = isCredit || isDana ? '1' : '0';
             amount.placeholder = isDana ? 'Nominal setoran/deposito' : 'Nominal realisasi wajib';
+            amount.readOnly = isCredit;
         }
         if (tenorField) tenorField.style.display = isCredit || p.prospect_type === 'DEPOSITO' ? 'block' : 'none';
+        if (tenor) tenor.readOnly = isCredit;
+        if (!isCredit && realizationPreview) realizationPreview.style.display = 'none';
         document.getElementById('closing-asset-name-field').style.display = isAsset ? 'block' : 'none';
         document.getElementById('closing-buyer-field').style.display = isAsset ? 'block' : 'none';
         document.getElementById('closing-asset-method-field').style.display = isAsset ? 'block' : 'none';
@@ -936,12 +973,88 @@ $prospect_id = $_GET['id'] ?? null;
         } catch(e) { showToast('Error','danger'); }
     });
 
+    let closingLookupTimer = null;
+    let closingLookupAccount = '';
+
+    function setClosingLookupState(type, message) {
+        const hint = document.getElementById('closing-account-hint');
+        if (!hint) return;
+        hint.textContent = message || '';
+        hint.style.color = type === 'error' ? '#D32F2F' : (type === 'success' ? '#388E3C' : '#64748B');
+    }
+
+    function clearClosingLookupFields() {
+        const form = document.getElementById('form-closing');
+        form.querySelector('[name="closing_realization_amount"]').value = '';
+        form.querySelector('[name="closing_tenor"]').value = '';
+        document.getElementById('closing-realization-preview').style.display = 'none';
+        closingLookupAccount = '';
+    }
+
+    function renderClosingLookup(data) {
+        document.getElementById('closing-lookup-name').textContent = data.nama_nasabah || '-';
+        document.getElementById('closing-lookup-product').textContent = [data.kode_produk, data.nama_produk].filter(Boolean).join(' - ') || '-';
+        document.getElementById('closing-lookup-amount').textContent = data.realisasi_pokok ? formatRupiah(data.realisasi_pokok) : '-';
+        document.getElementById('closing-lookup-date').textContent = data.tanggal_realisasi || '-';
+        document.getElementById('closing-lookup-address').textContent = data.alamat || '-';
+        document.getElementById('closing-realization-preview').style.display = 'block';
+
+        const form = document.getElementById('form-closing');
+        form.querySelector('[name="closing_realization_amount"]').value = data.realisasi_pokok || '';
+        form.querySelector('[name="closing_tenor"]').value = data.jml_angsuran || '';
+        closingLookupAccount = data.no_rekening || '';
+    }
+
+    async function lookupClosingAccount(accountNumber) {
+        const account = String(accountNumber || '').replace(/\s+/g, '');
+        if (!account) {
+            clearClosingLookupFields();
+            setClosingLookupState('idle', 'Ketik nomor rekening untuk mengambil data realisasi.');
+            return;
+        }
+
+        setClosingLookupState('idle', 'Mencari data realisasi...');
+        try {
+            const params = new URLSearchParams({ prospect_id: prospectId, no_rekening: account });
+            const res = await fetch(BASE_APP + '/api/?action=prospect_closing_lookup&' + params.toString(), {credentials:'include'});
+            const body = await res.json();
+            if (body.status === 200 && body.data) {
+                renderClosingLookup(body.data);
+                setClosingLookupState('success', 'Data realisasi ditemukan dan nominal otomatis terisi.');
+            } else {
+                clearClosingLookupFields();
+                setClosingLookupState('error', body.message || 'Nomor rekening tidak ditemukan.');
+            }
+        } catch (e) {
+            clearClosingLookupFields();
+            setClosingLookupState('error', 'Gagal mengecek nomor rekening.');
+        }
+    }
+
+    document.querySelector('#form-closing [name="closing_account_number"]').addEventListener('input', function() {
+        if (this.dataset.lookupEnabled !== '1') return;
+        this.value = this.value.replace(/\s+/g, '');
+        clearTimeout(closingLookupTimer);
+        closingLookupTimer = setTimeout(() => lookupClosingAccount(this.value), 450);
+    });
+
+    document.getElementById('modalClosing').addEventListener('shown.bs.modal', function() {
+        const account = document.querySelector('#form-closing [name="closing_account_number"]');
+        if (account?.dataset.lookupEnabled === '1' && account.value) lookupClosingAccount(account.value);
+    });
+
     document.getElementById('form-closing').addEventListener('submit', async function(e) {
         e.preventDefault();
         const fd = new FormData(this);
+        const isCredit = ['KREDIT', 'DEBITUR_EXISTING'].includes(prospectData?.prospect_type);
+        const account = String(fd.get('closing_account_number') || '').replace(/\s+/g, '');
+        if (isCredit && (!closingLookupAccount || closingLookupAccount !== account)) {
+            showToast('Nomor rekening wajib dicek dan valid dari data realisasi', 'danger');
+            return;
+        }
         const payload = {
             prospect_id: prospectId,
-            closing_account_number: fd.get('closing_account_number'),
+            closing_account_number: account,
             closing_realization_amount: parseInt(fd.get('closing_realization_amount') || '0'),
             closing_tenor: parseInt(fd.get('closing_tenor') || '0'),
             closing_asset_name: fd.get('closing_asset_name'),

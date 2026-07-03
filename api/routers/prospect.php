@@ -80,6 +80,12 @@ switch ($action) {
         (new ProspectController())->uploadCreditPipelineFile(readJsonBody());
         break;
 
+    case 'prospect_closing_lookup':
+        if ($request_method !== 'GET') sendResponse(405, 'Method harus GET', null);
+        $token = AuthMiddleware::require();
+        (new ProspectController())->closingLookup($_GET);
+        break;
+
     case 'prospect_close':
         if ($request_method !== 'POST') sendResponse(405, 'Method harus POST', null);
         $token = AuthMiddleware::require();

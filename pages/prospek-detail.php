@@ -652,6 +652,13 @@ $prospect_id = $_GET['id'] ?? null;
         if (method) method.required = isAsset;
     }
 
+    function uploadFileUrl(path) {
+        const normalized = String(path || '').replace(/^\/+/, '');
+        if (!normalized) return '';
+        if (/^https?:\/\//i.test(normalized)) return normalized;
+        return BASE_APP + '/api/?action=file_upload&path=' + encodeURIComponent(normalized);
+    }
+
     function renderCreditDocs(pipeline) {
         const section = document.getElementById('credit-docs-section');
         const list = document.getElementById('credit-docs-list');
@@ -669,7 +676,8 @@ $prospect_id = $_GET['id'] ?? null;
             const hint = isForm ? 'Foto/scan' : 'PDF';
             const safeName = String(d.doc_name || '').replace(/'/g, "\\'");
             const fileType = d.file_type || (isForm ? 'IMAGE' : 'PDF');
-            const viewButton = d.file_url ? `<button type="button" class="icon-mini-btn view" title="Lihat ${hint}" onclick="openFilePreview('${BASE_APP}/${d.file_url}', '${fileType}', '${safeName}')"><i class="fa-solid ${isForm ? 'fa-image' : 'fa-file-pdf'}"></i></button>` : '';
+            const viewUrl = d.file_url ? uploadFileUrl(d.file_url) : '';
+            const viewButton = viewUrl ? `<button type="button" class="icon-mini-btn view" title="Lihat ${hint}" onclick="openFilePreview('${escapeAttr(viewUrl)}', '${fileType}', '${safeName}')"><i class="fa-solid ${isForm ? 'fa-image' : 'fa-file-pdf'}"></i></button>` : '';
             const uploadButton = canUpdateSlaUi(prospectData) && isWithinUploadWindow(d.completed_at) ? `<button type="button" class="icon-mini-btn upload" title="Upload ${hint}" onclick="pickCreditDoc('${d.doc_code}', '${accept}')"><i class="fa-solid fa-upload"></i></button>` : '';
             return `<div class="doc-item">
                 <div class="doc-check ${done ? 'done' : 'wait'}"><i class="fa-solid ${done ? 'fa-check' : 'fa-clock'}"></i></div>
@@ -694,7 +702,8 @@ $prospect_id = $_GET['id'] ?? null;
             const isActive = !s.stage_ended_at;
             if (isActive) currentStage = stageLabels[s.stage] || s.stage;
             const dur = s.duration_days ? s.duration_days + ' hari' : (isActive ? 'Berjalan...' : '-');
-            const attachment = s.attachment_url ? `<button type="button" class="icon-mini-btn view ms-2" title="Lihat detail" onclick="openFilePreview('${BASE_APP}/${s.attachment_url}', '${s.attachment_type || 'IMAGE'}', 'Detail ${stageLabels[s.stage]||s.stage}')"><i class="fa-solid ${s.attachment_type === 'PDF' ? 'fa-file-pdf' : 'fa-image'}"></i></button>` : '';
+            const attachmentUrl = s.attachment_url ? uploadFileUrl(s.attachment_url) : '';
+            const attachment = attachmentUrl ? `<button type="button" class="icon-mini-btn view ms-2" title="Lihat detail" onclick="openFilePreview('${escapeAttr(attachmentUrl)}', '${s.attachment_type || 'IMAGE'}', 'Detail ${stageLabels[s.stage]||s.stage}')"><i class="fa-solid ${s.attachment_type === 'PDF' ? 'fa-file-pdf' : 'fa-image'}"></i></button>` : '';
             const canUploadAttachment = canUpdateSlaUi(prospectData) && ['ANALISA','KOMITE'].includes(s.stage) && isWithinUploadWindow(s.attachment_uploaded_at);
             const uploadAttachment = canUploadAttachment ? `<button type="button" class="icon-mini-btn upload ms-2" title="Upload PDF" onclick="pickStageAttachment('${s.stage}')"><i class="fa-solid fa-upload"></i></button>` : '';
             const analyst = s.stage === 'ANALISA' && s.analyst_employee_id ? `<div style="font-size:0.6rem;color:#64748B;"><i class="fa-solid fa-user-check me-1"></i>${escapeHtml(s.analyst_name || s.analyst_employee_id)} (${escapeHtml(s.analyst_employee_id)})</div>` : '';

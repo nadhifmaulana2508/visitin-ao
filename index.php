@@ -54,6 +54,30 @@ $requestUri = str_replace('/kunjungan-ao', '', $requestUri);
 $url = trim($requestUri, '/');
 
 // =========================
+// STATIC UPLOAD FALLBACK (aaPanel/Nginx rewrite)
+// =========================
+// Jika rewrite server melempar /uploads/... ke index.php, layani file aslinya.
+if (strpos($url, 'uploads/') === 0) {
+    $relativeUploadPath = str_replace(['..', '\\'], ['', '/'], $url);
+    $filePath = realpath(__DIR__ . '/' . $relativeUploadPath);
+    $uploadRoot = realpath(__DIR__ . '/uploads');
+
+    if ($filePath && $uploadRoot && str_starts_with($filePath, $uploadRoot) && is_file($filePath)) {
+        $mime = function_exists('mime_content_type') ? (mime_content_type($filePath) ?: 'application/octet-stream') : 'application/octet-stream';
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . filesize($filePath));
+        header('Cache-Control: private, max-age=86400');
+        header('X-Content-Type-Options: nosniff');
+        readfile($filePath);
+        exit;
+    }
+
+    http_response_code(404);
+    echo 'File upload tidak ditemukan';
+    exit;
+}
+
+// =========================
 // JANGAN LEWATKAN API KE ROUTER HALAMAN
 // =========================
 if (strpos($url, 'api/') === 0) {

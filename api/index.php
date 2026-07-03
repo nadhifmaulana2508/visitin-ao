@@ -87,6 +87,32 @@ switch ($action) {
         (new AuthController())->logout();
         break;
 
+    case 'file_upload':
+        if ($request_method !== 'GET') {
+            sendResponse(405, 'Method harus GET', null);
+        }
+
+        AuthMiddleware::require();
+        $path = trim((string)($_GET['path'] ?? ''), '/');
+        if ($path === '' || !str_starts_with($path, 'uploads/')) {
+            sendResponse(400, 'Path file tidak valid', null);
+        }
+
+        $path = str_replace(['..', '\\'], ['', '/'], $path);
+        $filePath = realpath(__DIR__ . '/../' . $path);
+        $uploadRoot = realpath(__DIR__ . '/../uploads');
+        if (!$filePath || !$uploadRoot || !str_starts_with($filePath, $uploadRoot) || !is_file($filePath)) {
+            sendResponse(404, 'File upload tidak ditemukan', null);
+        }
+
+        $mime = function_exists('mime_content_type') ? (mime_content_type($filePath) ?: 'application/octet-stream') : 'application/octet-stream';
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . filesize($filePath));
+        header('Cache-Control: private, max-age=86400');
+        header('X-Content-Type-Options: nosniff');
+        readfile($filePath);
+        exit;
+
     // ===================== KUNJUNGAN (legacy) =====================
     case 'get_mapping':
         echo json_encode([

@@ -74,19 +74,27 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 
     .p-name { font-size: 0.88rem; font-weight: 700; color: #1E293B; margin-bottom: 3px; }
     .p-meta { font-size: 0.7rem; color: #64748B; display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
-    .p-meta i { width: 14px; color: #A0AEC0; font-size: 0.65rem; }
-    .p-amount { font-size: 0.78rem; font-weight: 800; color: #0F766E; margin-top: 6px; }
-    .pipeline-card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-    .pipeline-card-side { display: flex; flex-direction: column; gap: 3px; }
+    .p-meta i { width: 14px; color: #A0AEC0; font-size: 0.65rem; flex: 0 0 14px; }
+    .meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .p-amount { font-size: 0.78rem; font-weight: 800; color: #0F766E; }
+    .pipeline-card-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(94px, 0.82fr); gap: 10px; align-items: start; }
+    .pipeline-card-main, .pipeline-card-side { min-width: 0; }
+    .pipeline-card-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+    .pipeline-card .p-name {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 0.86rem; line-height: 1.2;
+    }
+    .pipeline-card .p-meta { max-width: 100%; }
+    .pipeline-card-side .p-meta { justify-content: flex-end; text-align: right; }
+    .pipeline-card-side .meta-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .pipeline-age {
-        align-self: flex-start; display: inline-flex; align-items: center; gap: 4px;
+        align-self: flex-end; display: inline-flex; align-items: center; gap: 4px;
         font-size: 0.62rem; font-weight: 800; color: #334155; background: #F1F5F9;
         border-radius: 6px; padding: 4px 7px; margin-top: 2px;
     }
     @media (min-width: 768px) {
         .prospek-card.pipeline-card { padding: 14px 16px; }
-        .pipeline-card-body { grid-template-columns: minmax(0, 1fr) minmax(170px, 0.78fr); align-items: start; column-gap: 14px; }
-        .pipeline-card-side { align-items: flex-start; padding-top: 2px; }
+        .pipeline-card-body { grid-template-columns: minmax(0, 1fr) minmax(170px, 0.78fr); column-gap: 14px; }
         .pipeline-card .p-name { margin-bottom: 4px; }
     }
 
@@ -545,10 +553,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             const selectable = canDelegateProspek && p.delegation_status === 'BELUM_DIDELEGASIKAN';
             const check = selectable ? `<input type="checkbox" class="bulk-check" aria-label="Pilih prospek" onclick="event.stopPropagation();" onchange="toggleBulkProspect(this, ${p.id})">` : '';
             const stage = p.credit_pipeline_stage || p.credit_pipeline_status || (p.status === 'OPEN' ? 'Menunggu follow up' : '-');
+            const amountText = p.requested_loan_amount ? formatRupiah(p.requested_loan_amount) : '-';
             const pipelineInfo = isPipelineCredit ? `
-                <div class="p-amount"><i class="fa-solid fa-money-bill-wave me-1"></i>${p.requested_loan_amount ? formatRupiah(p.requested_loan_amount) : 'Belum ada nominal pengajuan'}</div>
-                <div class="p-meta"><i class="fa-solid fa-user-tie"></i>${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}</div>
-                <div class="p-meta"><i class="fa-solid fa-diagram-project"></i>${escapeHtml(stage)}</div>
+                <div class="p-amount"><i class="fa-solid fa-money-bill-wave me-1"></i>${amountText}</div>
+                <div class="p-meta" title="${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}"><i class="fa-solid fa-user-tie"></i><span class="meta-text">${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}</span></div>
+                <div class="p-meta"><i class="fa-solid fa-diagram-project"></i><span class="meta-text">${escapeHtml(stage)}</span></div>
                 <div class="pipeline-age"><i class="fa-solid fa-clock"></i>${formatPipelineAge(p.pipeline_days)}</div>
             ` : '';
             const cardClass = `${typeClass} ${selectable ? 'selectable' : ''} ${isPipelineCredit ? 'pipeline-card' : ''}`;
@@ -559,10 +568,10 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
                     <div class="d-flex gap-1">${delBadge}${statusBadge}</div>
                 </div>
                 <div class="${isPipelineCredit ? 'pipeline-card-body' : ''}">
-                    <div>
-                        <div class="p-name">${p.customer_name}</div>
-                        <div class="p-meta"><i class="fa-solid fa-box-open"></i>${p.rekomendasi_produk || '-'}</div>
-                        <div class="p-meta"><i class="fa-solid fa-briefcase"></i>${p.jenis_usaha || '-'}</div>
+                    <div class="${isPipelineCredit ? 'pipeline-card-main' : ''}">
+                        <div class="p-name" title="${escapeHtml(p.customer_name || '-')}">${escapeHtml(p.customer_name || '-')}</div>
+                        <div class="p-meta"><i class="fa-solid fa-box-open"></i><span class="meta-text">${escapeHtml(p.rekomendasi_produk || '-')}</span></div>
+                        <div class="p-meta"><i class="fa-solid fa-briefcase"></i><span class="meta-text">${escapeHtml(p.jenis_usaha || '-')}</span></div>
                     </div>
                     ${isPipelineCredit ? `<div class="pipeline-card-side">${pipelineInfo}</div>` : pipelineInfo}
                 </div>

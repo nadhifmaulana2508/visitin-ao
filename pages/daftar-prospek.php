@@ -75,6 +75,20 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     .p-name { font-size: 0.88rem; font-weight: 700; color: #1E293B; margin-bottom: 3px; }
     .p-meta { font-size: 0.7rem; color: #64748B; display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
     .p-meta i { width: 14px; color: #A0AEC0; font-size: 0.65rem; }
+    .p-amount { font-size: 0.78rem; font-weight: 800; color: #0F766E; margin-top: 6px; }
+
+    .pipeline-summary {
+        display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+        margin: -4px 16px 16px 16px;
+    }
+    @media (min-width: 768px) { .pipeline-summary { margin: -4px 24px 16px 24px; } }
+    @media (min-width: 1024px) { .pipeline-summary { margin: -4px 32px 18px 32px; } }
+    .pipeline-summary-card {
+        background: #ffffff; border-radius: 10px; padding: 12px 14px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.025);
+    }
+    .pipeline-summary-label { font-size: 0.62rem; font-weight: 800; color: #64748B; text-transform: uppercase; }
+    .pipeline-summary-value { font-size: 1rem; font-weight: 900; color: #1E293B; margin-top: 2px; }
 
     .badge-delegasi { font-size: 0.55rem; padding: 3px 6px; border-radius: 4px; font-weight: 700; }
     .del-pending { background: #FFE0B2; color: #E65100; }
@@ -166,6 +180,17 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     <div class="stat-card"><span class="stat-num" id="s-reject" style="font-size:1.2rem;font-weight:800;color:#D32F2F;">0</span><span class="stat-lbl" style="font-size:0.6rem;color:#64748B;font-weight:600;">Reject</span></div>
 </div>
 
+<div class="pipeline-summary" id="pipeline-summary">
+    <div class="pipeline-summary-card">
+        <div class="pipeline-summary-label">Pengajuan Pipeline</div>
+        <div class="pipeline-summary-value" id="pipeline-pengajuan">Rp0</div>
+    </div>
+    <div class="pipeline-summary-card">
+        <div class="pipeline-summary-label">Realisasi Kredit</div>
+        <div class="pipeline-summary-value" id="pipeline-realisasi">Rp0</div>
+    </div>
+</div>
+
 <!-- Filters -->
 <div class="filter-section">
     <!-- Source tabs (AO / Non-AO / Pending) -->
@@ -231,6 +256,12 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
                 <label style="font-size:0.6rem; font-weight:700; color:#64748B;">Cabang</label>
                 <select class="filter-select" id="f-cabang">
                     <option value="">Semua Cabang</option>
+                </select>
+            </div>
+            <div class="filter-item" id="filter-ao-wrap" style="display:none;">
+                <label style="font-size:0.6rem; font-weight:700; color:#64748B;">AO Kredit</label>
+                <select class="filter-select" id="f-ao">
+                    <option value="">Semua AO</option>
                 </select>
             </div>
         </div>
@@ -318,6 +349,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     const urlType = '<?= $url_type ?>';
     const urlSource = '<?= $url_source ?>';
     const urlView = '<?= $url_view ?>';
+    const isPipelineCredit = urlFilter === 'sla';
     const userRole = <?= json_encode($user_role) ?>;
     const userKodeKantor = <?= json_encode($user_kode_kantor) ?>;
     const userAccessKorwil = <?= json_encode($user_access_korwil) ?>;
@@ -333,7 +365,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     // Pre-fill from URL params
     if (urlFilter === 'pending') currentSource = 'pending';
     if (!canDelegateProspek && currentSource === 'pending') currentSource = 'all';
-    if (urlFilter === 'sla') document.getElementById('f-status').value = 'SLA';
+    if (isPipelineCredit) document.getElementById('list-title').textContent = 'Pipeline Kredit';
     if (urlType) document.getElementById('f-type').value = urlType;
 
     // =========================================
@@ -355,6 +387,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     // =========================================
     const fKorwil = document.getElementById('f-korwil');
     const fCabang = document.getElementById('f-cabang');
+    const fAo = document.getElementById('f-ao');
     let allCabang = [];
 
     async function loadCabangFilter() {
@@ -379,9 +412,37 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             fCabang.disabled = true;
             fKorwil.disabled = true;
         }
+        loadPipelineAoFilter();
     }
     fKorwil.addEventListener('change', renderCabangFilter);
+    fCabang.addEventListener('change', loadPipelineAoFilter);
+    fAo.addEventListener('change', () => { if (isPipelineCredit) { currentPage = 1; loadData(); } });
     const cabangReady = loadCabangFilter();
+
+    async function loadPipelineAoFilter() {
+        const wrap = document.getElementById('filter-ao-wrap');
+        if (!wrap || !isPipelineCredit) return;
+
+        wrap.style.display = 'block';
+        fAo.innerHTML = '<option value="">Semua AO</option>';
+        const kode = fCabang.value || (!isPusat && userKodeKantor !== '000' ? userKodeKantor : '');
+        if (!kode) {
+            fAo.innerHTML = '<option value="">Pilih cabang dulu</option>';
+            return;
+        }
+
+        try {
+            const params = new URLSearchParams({ kode_kantor: kode, group_jabatan: 'AO Kredit', tipe: 'kredit' });
+            const res = await fetch(BASE_APP + '/api/?action=master_pegawai_ao&' + params.toString(), {credentials:'include'});
+            const body = await res.json();
+            const rows = body.status === 200 ? (body.data || []) : [];
+            fAo.innerHTML = '<option value="">Semua AO</option>' + rows.map(ao =>
+                `<option value="${escapeHtml(ao.employee_id)}">${escapeHtml(ao.full_name || ao.employee_id)} (${escapeHtml(ao.employee_id)})</option>`
+            ).join('');
+        } catch(e) {
+            fAo.innerHTML = '<option value="">AO gagal dimuat</option>';
+        }
+    }
 
     function isAdvancedFilterOpen() {
         return document.getElementById('advanced-filter').open;
@@ -393,6 +454,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 
         if (fKorwil.value) params.set('korwil', fKorwil.value);
         if (fCabang.value) params.set('kode_kantor', fCabang.value);
+        if (isPipelineCredit && fAo.value) params.set('assigned_to', fAo.value);
         params.set('closing_date', document.getElementById('f-closing-date').value);
         params.set('harian_date', document.getElementById('f-harian-date').value);
     }
@@ -420,8 +482,9 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             page: currentPage,
             limit: 20,
         });
+        if (isPipelineCredit) params.set('pipeline_credit', '1');
         if (advancedOpen || urlType) params.set('prospect_type', document.getElementById('f-type').value);
-        if (advancedOpen || urlFilter === 'sla') params.set('status', document.getElementById('f-status').value);
+        if (advancedOpen) params.set('status', document.getElementById('f-status').value);
         appendAdvancedListFilters(params);
         if (currentSource === 'pending') params.set('delegation', 'BELUM_DIDELEGASIKAN');
 
@@ -462,6 +525,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             const cabang = p.nama_kantor ? `${p.kode_kantor} - ${p.nama_kantor}` : p.kode_kantor;
             const selectable = canDelegateProspek && p.delegation_status === 'BELUM_DIDELEGASIKAN';
             const check = selectable ? `<input type="checkbox" class="bulk-check" aria-label="Pilih prospek" onclick="event.stopPropagation();" onchange="toggleBulkProspect(this, ${p.id})">` : '';
+            const pipelineInfo = isPipelineCredit ? `
+                <div class="p-amount"><i class="fa-solid fa-money-bill-wave me-1"></i>${formatRupiah(p.requested_loan_amount || 0)}</div>
+                <div class="p-meta"><i class="fa-solid fa-user-tie"></i>${escapeHtml(formatAoName(p.assigned_to, p.assigned_to_name))}</div>
+                <div class="p-meta"><i class="fa-solid fa-diagram-project"></i>${escapeHtml(p.credit_pipeline_stage || p.credit_pipeline_status || '-')}</div>
+            ` : '';
             return `<a href="${BASE_APP}/prospek-detail/${p.id}" class="prospek-card ${typeClass} ${selectable ? 'selectable' : ''}" data-prospect-id="${p.id}">
                 ${check}
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -471,6 +539,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
                 <div class="p-name">${p.customer_name}</div>
                 <div class="p-meta"><i class="fa-solid fa-box-open"></i>${p.rekomendasi_produk || '-'}</div>
                 <div class="p-meta"><i class="fa-solid fa-briefcase"></i>${p.jenis_usaha || '-'}</div>
+                ${pipelineInfo}
                 <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px solid #F4F7F6;">
                     <span class="p-meta mb-0"><i class="fa-solid fa-building"></i>${cabang}</span>
                     <span style="font-size:0.6rem;color:#94A3B8;">${formatDate(p.created_at)}</span>
@@ -496,6 +565,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
         const params = new URLSearchParams({
             source: currentSource === 'pending' ? 'all' : currentSource,
         });
+        if (isPipelineCredit) params.set('pipeline_credit', '1');
         appendAdvancedListFilters(params);
 
         try {
@@ -507,6 +577,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             document.getElementById('s-sla').textContent = s.total_sla || 0;
             document.getElementById('s-closing').textContent = s.total_closing || 0;
             document.getElementById('s-reject').textContent = s.total_reject || 0;
+            document.getElementById('pipeline-summary').style.display = isPipelineCredit ? 'grid' : 'none';
+            if (isPipelineCredit) {
+                document.getElementById('pipeline-pengajuan').textContent = formatRupiah(s.total_pipeline_pengajuan || 0);
+                document.getElementById('pipeline-realisasi').textContent = formatRupiah(s.total_pipeline_realisasi || 0);
+            }
         } catch(e) {}
     }
 
@@ -667,9 +742,11 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             closing_date: document.getElementById('f-closing-date').value || '<?= $default_closing_date ?>',
             harian_date: document.getElementById('f-harian-date').value || '<?= $default_harian ?>',
         });
+        if (isPipelineCredit) params.set('pipeline_credit', '1');
         if (currentSource !== 'mine') {
             if (fKorwil.value) params.set('korwil', fKorwil.value);
             if (fCabang.value) params.set('kode_kantor', fCabang.value);
+            if (isPipelineCredit && fAo.value) params.set('assigned_to', fAo.value);
         }
         try {
             const res = await fetch(BASE_APP + '/api/?action=prospect_report&' + params.toString(), {credentials:'include'});
@@ -742,6 +819,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     }
     function formatDate(d) { if(!d) return '-'; return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
     function formatRupiah(n) { return new Intl.NumberFormat('id-ID', {style:'currency', currency:'IDR', maximumFractionDigits:0}).format(Number(n || 0)); }
+    function formatAoName(id, name) { return name ? `${name} (${id || '-'})` : (id || 'Belum ada AO'); }
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
     }

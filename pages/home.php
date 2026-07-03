@@ -147,13 +147,6 @@ $can_access_history = (bool)($menu['can_access_history'] ?? true);
         </a>
         <?php endif; ?>
 
-        <?php if ($is_ao_dana): ?>
-        <a href="<?= BASE_APP ?>/daftar-prospek?type=TABUNGAN" class="menu-card">
-            <div class="menu-icon-wrapper icon-cyan"><i class="fa-solid fa-piggy-bank"></i></div>
-            <span class="menu-title">Pipeline Dana</span>
-        </a>
-        <?php endif; ?>
-
         <?php if ($can_view_report_prospek && $role !== 'staff'): ?>
         <a href="<?= BASE_APP ?>/daftar-prospek?view=report" class="menu-card">
             <div class="menu-icon-wrapper icon-blue"><i class="fa-solid fa-file-lines"></i></div>

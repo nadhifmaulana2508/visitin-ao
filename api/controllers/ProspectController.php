@@ -578,10 +578,17 @@ class ProspectController
         $userAccessKorwil = $user['access_korwil'] ?? null;
         $filterSource = $params['source'] ?? null; // 'ao', 'non_ao', 'mine', 'all'
         $isMineSource = $filterSource === 'mine';
+        $isPipelineCredit = (($params['pipeline_credit'] ?? '') === '1');
 
         // Base query
-        $sql = "SELECT p.*, kk.nama_kantor, kk.korwil FROM prospects p 
-                " . $this->kodeKantorJoinSql('kk') . " 
+        $sql = "SELECT p.*, kk.nama_kantor, kk.korwil,
+                    pc.id AS credit_pipeline_id,
+                    pc.requested_loan_amount,
+                    pc.current_stage AS credit_pipeline_stage,
+                    pc.pipeline_status AS credit_pipeline_status
+                FROM prospects p
+                " . $this->kodeKantorJoinSql('kk') . "
+                LEFT JOIN prospect_credit_pipelines pc ON pc.prospect_id = p.id
                 WHERE 1=1";
         $binds = [];
 
@@ -669,6 +676,16 @@ class ProspectController
             $binds[':flt_deleg'] = $filterDelegasi;
         }
 
+        if ($isPipelineCredit) {
+            $sql .= " AND pc.id IS NOT NULL AND p.prospect_type IN ('KREDIT','DEBITUR_EXISTING')";
+        }
+
+        $filterAssignedTo = trim((string)($params['assigned_to'] ?? ''));
+        if ($filterAssignedTo !== '' && $filterAssignedTo !== 'all') {
+            $sql .= " AND p.assigned_to = :flt_assigned_to";
+            $binds[':flt_assigned_to'] = $filterAssignedTo;
+        }
+
         // --- FILTER: AO vs Non-AO (is_ao_input) ---
         if ($filterSource === 'ao') {
             $sql .= " AND p.is_ao_input = 1";
@@ -740,6 +757,10 @@ class ProspectController
         $stmt = $this->db->prepare($sql);
         $stmt->execute($binds);
         $data = $stmt->fetchAll();
+        foreach ($data as &$row) {
+            $row['assigned_to_name'] = $this->getEmployeeDisplayName($row['assigned_to'] ?? null);
+        }
+        unset($row);
 
         // Count total (tanpa LIMIT)
         $countSql = preg_replace('/ORDER BY.*$/s', '', preg_replace('/^SELECT.*?FROM/s', 'SELECT COUNT(*) as total FROM', $sql));
@@ -1621,6 +1642,7 @@ class ProspectController
         $userAccessKorwil = $user['access_korwil'] ?? null;
         $source = $params['source'] ?? 'all';
         $isMineSource = $source === 'mine';
+        $isPipelineCredit = (($params['pipeline_credit'] ?? '') === '1');
 
         // Default range: closing = akhir bulan kemarin, harian = hari ini
         $defaultClosingEnd = date('Y-m-t', strtotime('last month'));
@@ -1692,7 +1714,19 @@ class ProspectController
             $binds[':source_created_by'] = $user['employee_id'] ?? '';
         }
 
-        $where = "WHERE 1=1" . $accessWhere . $kantorWhere . $sourceWhere;
+        $pipelineWhere = "";
+        if ($isPipelineCredit) {
+            $pipelineWhere .= " AND pc.id IS NOT NULL AND p.prospect_type IN ('KREDIT','DEBITUR_EXISTING')";
+        }
+
+        $assignedTo = trim((string)($params['assigned_to'] ?? ''));
+        if ($assignedTo !== '' && $assignedTo !== 'all') {
+            $pipelineWhere .= " AND p.assigned_to = :flt_assigned_to";
+            $binds[':flt_assigned_to'] = $assignedTo;
+        }
+
+        $where = "WHERE 1=1" . $accessWhere . $kantorWhere . $sourceWhere . $pipelineWhere;
+        $pipelineJoin = "LEFT JOIN prospect_credit_pipelines pc ON pc.prospect_id = p.id";
 
         // Summary stats
         $summaryStmt = $this->db->prepare("SELECT 
@@ -1705,8 +1739,10 @@ class ProspectController
             SUM(CASE WHEN p.is_ao_input = 1 THEN 1 ELSE 0 END) AS total_from_ao,
             SUM(CASE WHEN p.is_ao_input = 0 THEN 1 ELSE 0 END) AS total_from_non_ao,
             SUM(CASE WHEN p.delegation_status = 'BELUM_DIDELEGASIKAN' THEN 1 ELSE 0 END) AS total_pending_delegasi,
-            SUM(CASE WHEN p.status = 'CLOSING' THEN COALESCE(p.closing_realization_amount, 0) ELSE 0 END) AS total_realisasi
-            FROM prospects p {$where}");
+            SUM(CASE WHEN p.status = 'CLOSING' THEN COALESCE(p.closing_realization_amount, 0) ELSE 0 END) AS total_realisasi,
+            SUM(COALESCE(pc.requested_loan_amount, 0)) AS total_pipeline_pengajuan,
+            SUM(CASE WHEN p.status = 'CLOSING' THEN COALESCE(p.closing_realization_amount, 0) ELSE 0 END) AS total_pipeline_realisasi
+            FROM prospects p {$pipelineJoin} {$where}");
         $summaryStmt->execute($binds);
         $summary = $summaryStmt->fetch();
 
@@ -1714,7 +1750,7 @@ class ProspectController
         $closingBinds = array_merge($binds, [':clf' => $closingFrom . ' 00:00:00', ':clt' => $closingTo . ' 23:59:59']);
         $closingStmt = $this->db->prepare("SELECT COUNT(*) AS jumlah, 
             SUM(COALESCE(p.closing_realization_amount, 0)) AS nominal
-            FROM prospects p {$where} AND p.status = 'CLOSING' AND p.closed_at BETWEEN :clf AND :clt");
+            FROM prospects p {$pipelineJoin} {$where} AND p.status = 'CLOSING' AND p.closed_at BETWEEN :clf AND :clt");
         $closingStmt->execute($closingBinds);
         $closingReport = $closingStmt->fetch();
 
@@ -1725,14 +1761,14 @@ class ProspectController
             ':hd2' => $harianDate . ' 23:59:59'
         ]);
         $harianStmt = $this->db->prepare("SELECT COUNT(*) AS jumlah 
-            FROM prospects p {$where} AND p.created_at > :hd AND p.created_at <= :hd2");
+            FROM prospects p {$pipelineJoin} {$where} AND p.created_at > :hd AND p.created_at <= :hd2");
         $harianStmt->execute($harianBinds);
         $harianReport = $harianStmt->fetch();
 
         // Per type breakdown
         $typeStmt = $this->db->prepare("SELECT p.prospect_type, COUNT(*) AS jumlah,
             SUM(CASE WHEN p.status = 'CLOSING' THEN COALESCE(p.closing_realization_amount,0) ELSE 0 END) AS realisasi
-            FROM prospects p {$where} GROUP BY p.prospect_type");
+            FROM prospects p {$pipelineJoin} {$where} GROUP BY p.prospect_type");
         $typeStmt->execute($binds);
         $perType = $typeStmt->fetchAll();
 

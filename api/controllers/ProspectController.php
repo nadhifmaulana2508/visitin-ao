@@ -576,6 +576,8 @@ class ProspectController
         $userPerms = $user['permissions'] ?? [];
         $userKodeKantor = $user['kode_kantor'] ?? '000';
         $userAccessKorwil = $user['access_korwil'] ?? null;
+        $filterSource = $params['source'] ?? null; // 'ao', 'non_ao', 'mine', 'all'
+        $isMineSource = $filterSource === 'mine';
 
         // Base query
         $sql = "SELECT p.*, kk.nama_kantor, kk.korwil FROM prospects p 
@@ -590,7 +592,9 @@ class ProspectController
         // AO: hanya yang assigned ke dia
         // Staff: hanya yang dia input
 
-        if ($userRole === 'developer') {
+        if ($isMineSource) {
+            // Prospek Saya adalah tracking pribadi lintas cabang/kode kantor.
+        } elseif ($userRole === 'developer') {
             // Full access, no filter
         } elseif ($userRole === 'superuser') {
             if ($userAccessKorwil) {
@@ -628,10 +632,10 @@ class ProspectController
         $filterKorwil = $params['korwil'] ?? null;
         $filterKodeKantor = $params['kode_kantor'] ?? null;
 
-        if ($filterKodeKantor && $filterKodeKantor !== 'all') {
+        if (!$isMineSource && $filterKodeKantor && $filterKodeKantor !== 'all') {
             $sql .= " AND p.kode_kantor = :flt_kk";
             $binds[':flt_kk'] = $filterKodeKantor;
-        } elseif ($filterKorwil && $filterKorwil !== 'all') {
+        } elseif (!$isMineSource && $filterKorwil && $filterKorwil !== 'all') {
             $korwilCodes = Database::getKodeKantorByKorwil($filterKorwil);
             if (!empty($korwilCodes)) {
                 $placeholders = [];
@@ -666,7 +670,6 @@ class ProspectController
         }
 
         // --- FILTER: AO vs Non-AO (is_ao_input) ---
-        $filterSource = $params['source'] ?? null; // 'ao', 'non_ao', 'mine', 'all'
         if ($filterSource === 'ao') {
             $sql .= " AND p.is_ao_input = 1";
         } elseif ($filterSource === 'non_ao') {
@@ -679,7 +682,7 @@ class ProspectController
         // --- FILTER: Periode berjalan (created_at > closing_date dan <= harian_date) ---
         $closingDate = $params['closing_date'] ?? null;
         $harianDate = $params['harian_date'] ?? null;
-        if ($closingDate || $harianDate) {
+        if (!$isMineSource && ($closingDate || $harianDate)) {
             if ($closingDate) {
                 $sql .= " AND p.created_at > :closing_date_limit";
                 $binds[':closing_date_limit'] = $closingDate . ' 23:59:59';
@@ -688,7 +691,7 @@ class ProspectController
                 $sql .= " AND p.created_at <= :harian_date_limit";
                 $binds[':harian_date_limit'] = $harianDate . ' 23:59:59';
             }
-        } else {
+        } elseif (!$isMineSource) {
             // Backward compatible untuk query lama.
             $dateFrom = $params['date_from'] ?? null;
             $dateTo = $params['date_to'] ?? null;
@@ -1616,6 +1619,8 @@ class ProspectController
         $userRole = $user['role'] ?? 'staff';
         $userKodeKantor = $user['kode_kantor'] ?? '000';
         $userAccessKorwil = $user['access_korwil'] ?? null;
+        $source = $params['source'] ?? 'all';
+        $isMineSource = $source === 'mine';
 
         // Default range: closing = akhir bulan kemarin, harian = hari ini
         $defaultClosingEnd = date('Y-m-t', strtotime('last month'));
@@ -1631,7 +1636,9 @@ class ProspectController
         // AO = assigned + input sendiri; staff = input sendiri.
         $accessWhere = "";
         $binds = [];
-        if ($userRole === 'developer') {
+        if ($isMineSource) {
+            // Prospek Saya lintas cabang/kode kantor, dibatasi oleh created_by di source filter.
+        } elseif ($userRole === 'developer') {
             // Full access
         } elseif ($userRole === 'superuser') {
             if ($userAccessKorwil) {
@@ -1664,10 +1671,10 @@ class ProspectController
         $filterKorwil = $params['korwil'] ?? null;
         $filterKode = $params['kode_kantor'] ?? null;
         $kantorWhere = "";
-        if ($filterKode && $filterKode !== 'all') {
+        if (!$isMineSource && $filterKode && $filterKode !== 'all') {
             $kantorWhere = " AND p.kode_kantor = :fkk";
             $binds[':fkk'] = $filterKode;
-        } elseif ($filterKorwil && $filterKorwil !== 'all') {
+        } elseif (!$isMineSource && $filterKorwil && $filterKorwil !== 'all') {
             $codes = Database::getKodeKantorByKorwil($filterKorwil);
             if (!empty($codes)) {
                 $ph = [];
@@ -1678,7 +1685,6 @@ class ProspectController
 
         // Source filter
         $sourceWhere = "";
-        $source = $params['source'] ?? 'all';
         if ($source === 'ao') $sourceWhere = " AND p.is_ao_input = 1";
         elseif ($source === 'non_ao') $sourceWhere = " AND p.is_ao_input = 0";
         elseif ($source === 'mine') {

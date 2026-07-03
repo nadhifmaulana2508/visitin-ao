@@ -389,6 +389,7 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 
     function appendAdvancedListFilters(params) {
         if (!isAdvancedFilterOpen()) return;
+        if (currentSource === 'mine') return;
 
         if (fKorwil.value) params.set('korwil', fKorwil.value);
         if (fCabang.value) params.set('kode_kantor', fCabang.value);
@@ -663,11 +664,13 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     async function loadReport() {
         const params = new URLSearchParams({
             source: currentSource === 'pending' ? 'all' : currentSource,
-            korwil: fKorwil.value,
-            kode_kantor: fCabang.value,
             closing_date: document.getElementById('f-closing-date').value || '<?= $default_closing_date ?>',
             harian_date: document.getElementById('f-harian-date').value || '<?= $default_harian ?>',
         });
+        if (currentSource !== 'mine') {
+            if (fKorwil.value) params.set('korwil', fKorwil.value);
+            if (fCabang.value) params.set('kode_kantor', fCabang.value);
+        }
         try {
             const res = await fetch(BASE_APP + '/api/?action=prospect_report&' + params.toString(), {credentials:'include'});
             const body = await res.json();

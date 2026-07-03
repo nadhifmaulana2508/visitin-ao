@@ -12,6 +12,9 @@ if (!function_exists('httpRequest')) {
     function httpRequest(string $method, string $url, ?array $body = null, array $headers = []): array
     {
         $ch = curl_init();
+        $timeout = max(1, (int) env('HTTP_TIMEOUT', 30));
+        $connectTimeout = max(1, (int) env('HTTP_CONNECT_TIMEOUT', 10));
+        $verifySsl = env_bool('HTTP_SSL_VERIFY', true);
 
         $defaultHeaders = ['Accept: application/json'];
         if ($body !== null) {
@@ -23,11 +26,11 @@ if (!function_exists('httpRequest')) {
             CURLOPT_URL            => $url,
             CURLOPT_CUSTOMREQUEST  => strtoupper($method),
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 15,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => $timeout,
+            CURLOPT_CONNECTTIMEOUT => $connectTimeout,
             CURLOPT_HTTPHEADER     => $finalHeaders,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_SSL_VERIFYPEER => $verifySsl,
+            CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
         ]);
 
         if ($body !== null) {
@@ -43,7 +46,7 @@ if (!function_exists('httpRequest')) {
         if ($errno !== 0) {
             return [
                 'status' => 0,
-                'body'   => ['message' => 'cURL error: ' . $err],
+                'body'   => ['message' => "cURL error ({$errno}): {$err}"],
                 'raw'    => '',
             ];
         }

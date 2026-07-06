@@ -62,20 +62,20 @@ $prospect_id = $_GET['id'] ?? null;
     .header-title-block { min-width:0; flex:1; }
     .sla-summary {
         display:none; grid-template-columns:1fr; gap:2px;
-        margin:0; padding:0; border:0; width:min(54%, 320px); flex-shrink:0;
+        margin:0; padding:0; border:0; width:min(48%, 280px); flex-shrink:0;
     }
     .sla-metric {
         background:transparent; border:0; border-radius:0; padding:0; min-height:0;
         display:flex; align-items:baseline; justify-content:flex-end; gap:6px; text-align:right;
     }
-    .sla-summary .sla-total { font-size:0.64rem; font-weight:900; color:#1E293B; line-height:1.15; }
+    .sla-summary .sla-total { font-size:0.64rem; font-weight:900; color:#1565C0; line-height:1.15; }
     .sla-summary .sla-label { font-size:0.54rem; color:#94A3B8; font-weight:800; text-transform:uppercase; line-height:1.1; white-space:nowrap; }
     .sla-metric-value { margin-top:0; font-size:0.62rem; font-weight:900; color:#0A1931; line-height:1.15; word-break:break-word; }
     .sla-metric-value.money { color:#00796B; }
     .sla-metric-value.percent { color:#1565C0; }
     @media (max-width: 420px) {
         .header-main { gap:8px; }
-        .sla-summary { width:52%; }
+        .sla-summary { width:48%; }
         .sla-summary .sla-label { font-size:0.5rem; }
         .sla-metric-value, .sla-summary .sla-total { font-size:0.56rem; }
     }
@@ -154,10 +154,6 @@ $prospect_id = $_GET['id'] ?? null;
                     <div class="sla-metric">
                         <span class="sla-label">SLA</span>
                         <span class="sla-total" id="sla-days">0</span>
-                    </div>
-                    <div class="sla-metric">
-                        <span class="sla-label">Tahap</span>
-                        <span class="sla-metric-value" id="sla-current-stage">-</span>
                     </div>
                     <div class="sla-metric">
                         <span class="sla-label">Pipeline</span>
@@ -661,9 +657,6 @@ $prospect_id = $_GET['id'] ?? null;
             renderHeaderCreditSummary(p);
             document.getElementById('sla-section').style.display = 'block';
             renderSlaStages(p.credit_pipeline?.stages || p.sla_logs || []);
-            if (!(p.sla_started_at || p.credit_pipeline?.sla_started_at)) {
-                document.getElementById('sla-current-stage').textContent = 'Menunggu pemberkasan';
-            }
         } else {
             document.getElementById('sla-summary').style.display = 'none';
             document.getElementById('sla-section').style.display = 'none';
@@ -682,8 +675,6 @@ $prospect_id = $_GET['id'] ?? null;
 
     function renderHeaderCreditSummary(p) {
         const summary = document.getElementById('sla-summary');
-        const stageLabels = {PEMBERKASAN:'Pemberkasan',SURVEY:'Survey',ANALISA:'Analisa',KOMITE:'Komite',SELESAI:'Selesai',BATAL:'Batal'};
-        const currentStage = p.status === 'CLOSING' ? 'Closing' : (stageLabels[p.credit_pipeline?.current_stage] || p.credit_pipeline?.current_stage || '-');
         const pipelineAmount = Number(p.credit_pipeline?.requested_loan_amount || 0);
         const realizationAmount = Number(p.closing_realization_amount || 0);
         const realizationPercent = pipelineAmount > 0 && realizationAmount > 0
@@ -692,7 +683,6 @@ $prospect_id = $_GET['id'] ?? null;
 
         summary.style.display = 'grid';
         document.getElementById('sla-days').textContent = p.sla_duration_days ?? 0;
-        document.getElementById('sla-current-stage').textContent = currentStage;
         document.getElementById('sla-pipeline-amount').textContent = pipelineAmount > 0 ? fmtRupiah(pipelineAmount) : '-';
         document.getElementById('sla-realization-amount').textContent = realizationAmount > 0 ? fmtRupiah(realizationAmount) : '-';
         document.getElementById('sla-realization-percent').textContent = realizationPercent !== null ? `${realizationPercent}%` : '-';
@@ -782,13 +772,9 @@ $prospect_id = $_GET['id'] ?? null;
         const stageLabels = {PEMBERKASAN:'Pemberkasan',SURVEY:'Survey',ANALISA:'Analisa',KOMITE:'Komite'};
         if (!logs || logs.length === 0) { el.innerHTML = '<p class="small text-muted">Belum ada tahap SLA</p>'; return; }
         const visibleStages = logs.filter(s => ['PEMBERKASAN','SURVEY','ANALISA','KOMITE'].includes(s.stage));
-        let currentStage = prospectData?.status === 'CLOSING'
-            ? 'Closing'
-            : (stageLabels[prospectData?.credit_pipeline?.current_stage] || prospectData?.credit_pipeline?.current_stage || '-');
         el.innerHTML = visibleStages.map(s => {
             const isDone = !!s.stage_ended_at;
             const isActive = !s.stage_ended_at;
-            if (isActive) currentStage = stageLabels[s.stage] || s.stage;
             const dur = s.duration_days ? s.duration_days + ' hari' : (isActive ? 'Berjalan...' : '-');
             const attachmentUrl = s.attachment_url ? uploadFileUrl(s.attachment_url) : '';
             const attachment = attachmentUrl ? `<button type="button" class="icon-mini-btn view ms-2" title="Lihat detail" onclick="openFilePreview('${escapeAttr(attachmentUrl)}', '${s.attachment_type || 'IMAGE'}', 'Detail ${stageLabels[s.stage]||s.stage}')"><i class="fa-solid ${s.attachment_type === 'PDF' ? 'fa-file-pdf' : 'fa-image'}"></i></button>` : '';
@@ -801,7 +787,6 @@ $prospect_id = $_GET['id'] ?? null;
                 ${analyst}<div class="sla-stage-dur">${dur}</div>${attachment}${uploadAttachment}
             </div>`;
         }).join('');
-        document.getElementById('sla-current-stage').textContent = currentStage;
     }
 
     function getNextStage(p) {

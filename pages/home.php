@@ -148,6 +148,13 @@ $can_access_history = (bool)($menu['can_access_history'] ?? true);
         </a>
         <?php endif; ?>
 
+        <?php if ($can_access_nominatif && ($is_ao_kredit || $is_superuser)): ?>
+        <a href="<?= BASE_APP ?>/kelolaan-ao-kredit" class="menu-card">
+            <div class="menu-icon-wrapper icon-cyan"><i class="fa-solid fa-briefcase"></i></div>
+            <span class="menu-title">Kelolaan AO Kredit</span>
+        </a>
+        <?php endif; ?>
+
         <?php if ($can_view_report_prospek && $role !== 'staff'): ?>
         <a href="<?= BASE_APP ?>/daftar-prospek?view=report" class="menu-card">
             <div class="menu-icon-wrapper icon-blue"><i class="fa-solid fa-file-lines"></i></div>

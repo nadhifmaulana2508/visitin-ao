@@ -35,7 +35,7 @@ $showProfile = (bool)($menu['can_access_profile'] ?? true);
     <?php endif; ?>
 
     <?php if ($showMapping): ?>
-    <a href="<?= BASE_APP ?>/mapping" class="nav-item <?= ($current_page == 'mapping') ? 'active' : '' ?>">
+    <a href="<?= BASE_APP ?>/mapping" class="nav-item <?= in_array($current_page, ['mapping', 'kelolaan-ao-kredit', 'kelolaan-ao-kredit-detail']) ? 'active' : '' ?>">
         <i class="fa-solid fa-users"></i>
         <span>Mapping</span>
     </a>

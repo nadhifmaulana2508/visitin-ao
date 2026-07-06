@@ -53,6 +53,11 @@ if (str_starts_with($action, 'prospect_') || str_starts_with($action, 'master_')
     if ($matched !== false) exit;
 }
 
+if (str_starts_with($action, 'ao_credit_')) {
+    $matched = require __DIR__ . '/routers/ao_credit_portfolio.php';
+    if ($matched !== false) exit;
+}
+
 // =====================================================
 // ROUTER: Action utama (auth, kunjungan, dll)
 // =====================================================

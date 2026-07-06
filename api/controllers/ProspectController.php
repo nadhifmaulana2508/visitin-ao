@@ -1337,11 +1337,97 @@ class ProspectController
         return preg_replace('/\s+/', '', trim((string) $accountNumber));
     }
 
-    private function getCreditRealizationByAccount(string $accountNumber): ?array
+    private function normalizePersonName(?string $name): string
     {
-        $accountNumber = $this->normalizeAccountNumber($accountNumber);
-        if ($accountNumber === '') {
-            return null;
+        $name = strtolower(trim((string) $name));
+        $name = preg_replace('/[^a-z0-9\s]/', ' ', $name);
+        return preg_replace('/\s+/', ' ', $name);
+    }
+
+    private function tokenizePersonName(?string $name): array
+    {
+        $normalized = $this->normalizePersonName($name);
+        if ($normalized === '') {
+            return [];
+        }
+
+        $ignored = ['bin', 'binti', 'alm', 'almarhum', 'almarhumah', 'hj', 'h', 'dr', 'drs', 'dra', 'ir', 'se', 'sh', 'sp', 'spd', 'skom', 's', 'kom'];
+        return array_values(array_filter(explode(' ', $normalized), fn($token) => strlen($token) >= 3 && !in_array($token, $ignored, true)));
+    }
+
+    private function calculateNameMatchScore(string $prospectName, string $realizationName): float
+    {
+        $a = $this->normalizePersonName($prospectName);
+        $b = $this->normalizePersonName($realizationName);
+        if ($a === '' || $b === '') {
+            return 0.0;
+        }
+        if ($a === $b || str_contains($a, $b) || str_contains($b, $a)) {
+            return 1.0;
+        }
+
+        $aTokens = $this->tokenizePersonName($a);
+        $bTokens = $this->tokenizePersonName($b);
+        if (empty($aTokens) || empty($bTokens)) {
+            return 0.0;
+        }
+
+        $matched = 0;
+        foreach ($aTokens as $tokenA) {
+            foreach ($bTokens as $tokenB) {
+                if ($tokenA === $tokenB || str_contains($tokenA, $tokenB) || str_contains($tokenB, $tokenA)) {
+                    $matched++;
+                    break;
+                }
+
+                $maxLen = max(strlen($tokenA), strlen($tokenB));
+                if ($maxLen >= 5 && (1 - (levenshtein($tokenA, $tokenB) / $maxLen)) >= 0.78) {
+                    $matched++;
+                    break;
+                }
+            }
+        }
+
+        $tokenScore = $matched / max(count($aTokens), count($bTokens));
+        $maxNameLen = max(strlen($a), strlen($b));
+        $fullScore = $maxNameLen > 0 ? (1 - (levenshtein($a, $b) / $maxNameLen)) : 0;
+
+        return max($tokenScore, $fullScore);
+    }
+
+    private function isNameMatchedForClosing(string $prospectName, string $realizationName): bool
+    {
+        return $this->calculateNameMatchScore($prospectName, $realizationName) >= 0.45;
+    }
+
+    private function mapCreditRealizationRow(array $row, string $prospectName = ''): array
+    {
+        $score = $prospectName !== ''
+            ? $this->calculateNameMatchScore($prospectName, (string)($row['nama_nasabah'] ?? ''))
+            : 0.0;
+
+        return [
+            'kode_kantor' => (string)($row['kode_kantor'] ?? ''),
+            'no_rekening' => (string)($row['no_rekening'] ?? ''),
+            'nasabah_id' => (string)($row['nasabah_id'] ?? ''),
+            'nama_nasabah' => (string)($row['nama_nasabah'] ?? ''),
+            'alamat' => (string)($row['alamat'] ?? ''),
+            'realisasi_pokok' => (int) round((float)($row['realisasi_pokok'] ?? 0)),
+            'tanggal_realisasi' => $row['tanggal_realisasi'] ?? null,
+            'jml_angsuran' => (int)($row['jml_angsuran'] ?? 0),
+            'suku_bunga_per_tahun' => (float)($row['suku_bunga_per_tahun'] ?? 0),
+            'kode_produk' => (string)($row['kode_produk'] ?? ''),
+            'nama_produk' => (string)($row['nama_produk'] ?? ''),
+            'match_score' => round($score, 3),
+        ];
+    }
+
+    private function getCreditRealizationCandidates(string $query, string $prospectName): array
+    {
+        $query = trim($query);
+        $accountNumber = $this->normalizeAccountNumber($query);
+        if ($query === '') {
+            return [];
         }
 
         $stmt = $this->db->prepare("SELECT
@@ -1358,29 +1444,47 @@ class ProspectController
                 pk.nama_produk
             FROM update_realisasi_kredit r
             LEFT JOIN produk_kredit pk ON CAST(pk.kode_produk AS CHAR) = CAST(r.kode_produk AS CHAR)
-            WHERE r.no_rekening = :rekening
-            ORDER BY r.tanggal_realisasi DESC, r.kretrans_id DESC
-            LIMIT 1");
-        $stmt->execute([':rekening' => $accountNumber]);
-        $row = $stmt->fetch();
+            WHERE r.tanggal_realisasi >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
+              AND (
+                r.no_rekening = :rekening_exact
+                OR r.no_rekening LIKE :rekening_like
+                OR r.nama_nasabah LIKE :nama_like
+              )
+            ORDER BY
+                CASE WHEN r.no_rekening = :rekening_exact_order THEN 0 ELSE 1 END,
+                r.tanggal_realisasi DESC,
+                r.kretrans_id DESC
+            LIMIT 20");
+        $stmt->execute([
+            ':rekening_exact' => $accountNumber,
+            ':rekening_exact_order' => $accountNumber,
+            ':rekening_like' => '%' . $accountNumber . '%',
+            ':nama_like' => '%' . $query . '%',
+        ]);
 
-        if (!$row) {
-            return null;
+        $rows = $stmt->fetchAll();
+        $mapped = array_map(fn($row) => $this->mapCreditRealizationRow($row, $prospectName), $rows);
+        usort($mapped, function ($a, $b) use ($accountNumber) {
+            $aExact = $a['no_rekening'] === $accountNumber ? 1 : 0;
+            $bExact = $b['no_rekening'] === $accountNumber ? 1 : 0;
+            if ($aExact !== $bExact) return $bExact <=> $aExact;
+            if ($a['match_score'] !== $b['match_score']) return $b['match_score'] <=> $a['match_score'];
+            return strcmp((string)$b['tanggal_realisasi'], (string)$a['tanggal_realisasi']);
+        });
+
+        return $mapped;
+    }
+
+    private function getMatchedCreditRealization(string $query, array $prospect): ?array
+    {
+        $candidates = $this->getCreditRealizationCandidates($query, (string)($prospect['customer_name'] ?? ''));
+        foreach ($candidates as $candidate) {
+            if ($this->isNameMatchedForClosing((string)($prospect['customer_name'] ?? ''), $candidate['nama_nasabah'])) {
+                return $candidate;
+            }
         }
 
-        return [
-            'kode_kantor' => (string)($row['kode_kantor'] ?? ''),
-            'no_rekening' => (string)($row['no_rekening'] ?? ''),
-            'nasabah_id' => (string)($row['nasabah_id'] ?? ''),
-            'nama_nasabah' => (string)($row['nama_nasabah'] ?? ''),
-            'alamat' => (string)($row['alamat'] ?? ''),
-            'realisasi_pokok' => (int) round((float)($row['realisasi_pokok'] ?? 0)),
-            'tanggal_realisasi' => $row['tanggal_realisasi'] ?? null,
-            'jml_angsuran' => (int)($row['jml_angsuran'] ?? 0),
-            'suku_bunga_per_tahun' => (float)($row['suku_bunga_per_tahun'] ?? 0),
-            'kode_produk' => (string)($row['kode_produk'] ?? ''),
-            'nama_produk' => (string)($row['nama_produk'] ?? ''),
-        ];
+        return null;
     }
 
     private function findClosedProspectByAccount(string $accountNumber, int $exceptProspectId = 0): ?array
@@ -1413,10 +1517,10 @@ class ProspectController
     {
         $user = $this->getCurrentUser();
         $prospectId = (int)($params['prospect_id'] ?? 0);
-        $accountNumber = $this->normalizeAccountNumber($params['no_rekening'] ?? '');
+        $query = trim((string)($params['query'] ?? ($params['no_rekening'] ?? '')));
 
-        if ($prospectId <= 0 || $accountNumber === '') {
-            sendResponse(400, 'prospect_id dan no_rekening wajib diisi', null);
+        if ($prospectId <= 0 || $query === '') {
+            sendResponse(400, 'prospect_id dan pencarian rekening/nama wajib diisi', null);
         }
 
         $stmt = $this->db->prepare("SELECT * FROM prospects WHERE id = :id");
@@ -1427,18 +1531,32 @@ class ProspectController
             sendResponse(403, 'Anda tidak punya akses ke prospek ini', null);
         }
 
-        $used = $this->findClosedProspectByAccount($accountNumber, $prospectId);
+        $candidates = $this->getCreditRealizationCandidates($query, (string)($prospect['customer_name'] ?? ''));
+        if (empty($candidates)) {
+            sendResponse(404, 'Data realisasi 3 bulan terakhir tidak ditemukan', null);
+        }
+
+        $realization = null;
+        foreach ($candidates as $candidate) {
+            if ($this->isNameMatchedForClosing((string)($prospect['customer_name'] ?? ''), $candidate['nama_nasabah'])) {
+                $realization = $candidate;
+                break;
+            }
+        }
+
+        if (!$realization) {
+            sendResponse(422, 'Nama realisasi tidak cocok dengan nama prospek. Anda salah menginputkan prospek.', [
+                'prospect_name' => $prospect['customer_name'] ?? '',
+            ]);
+        }
+
+        $used = $this->findClosedProspectByAccount($realization['no_rekening'], $prospectId);
         if ($used) {
             sendResponse(409, 'Nomor rekening sudah digunakan untuk closing prospek lain', [
                 'used_by_prospect_id' => (int)$used['id'],
                 'used_by_customer' => $used['customer_name'] ?? '',
                 'closed_at' => $used['closed_at'] ?? null,
             ]);
-        }
-
-        $realization = $this->getCreditRealizationByAccount($accountNumber);
-        if (!$realization) {
-            sendResponse(404, 'Nomor rekening tidak ditemukan di data realisasi kredit', null);
         }
 
         sendResponse(200, 'OK', $realization);
@@ -1472,19 +1590,34 @@ class ProspectController
                 sendResponse(400, 'Closing kredit baru bisa dilakukan setelah tahap Komite', null);
             }
 
-            $accountNum = trim($input['closing_account_number'] ?? '');
-            if ($accountNum === '') sendResponse(400, 'Closing kredit wajib input nomor rekening', null);
-            $used = $this->findClosedProspectByAccount($accountNum, $prospectId);
+            $accountNum = trim((string)($input['closing_account_number'] ?? ''));
+            if ($accountNum === '') sendResponse(400, 'Closing kredit wajib input nomor rekening atau nama debitur', null);
+
+            $candidates = $this->getCreditRealizationCandidates($accountNum, (string)($prospect['customer_name'] ?? ''));
+            if (empty($candidates)) {
+                sendResponse(404, 'Data realisasi 3 bulan terakhir tidak ditemukan', null);
+            }
+
+            $realization = null;
+            foreach ($candidates as $candidate) {
+                if ($this->isNameMatchedForClosing((string)($prospect['customer_name'] ?? ''), $candidate['nama_nasabah'])) {
+                    $realization = $candidate;
+                    break;
+                }
+            }
+
+            if (!$realization) {
+                sendResponse(422, 'Nama realisasi tidak cocok dengan nama prospek. Anda salah menginputkan prospek.', [
+                    'prospect_name' => $prospect['customer_name'] ?? '',
+                ]);
+            }
+
+            $used = $this->findClosedProspectByAccount($realization['no_rekening'], $prospectId);
             if ($used) {
                 sendResponse(409, 'Nomor rekening sudah digunakan untuk closing prospek lain', [
                     'used_by_prospect_id' => (int)$used['id'],
                     'used_by_customer' => $used['customer_name'] ?? '',
                 ]);
-            }
-
-            $realization = $this->getCreditRealizationByAccount($accountNum);
-            if (!$realization) {
-                sendResponse(404, 'Nomor rekening tidak ditemukan di data realisasi kredit', null);
             }
 
             $input['closing_account_number'] = $realization['no_rekening'];

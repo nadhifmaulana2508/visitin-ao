@@ -313,9 +313,9 @@ $prospect_id = $_GET['id'] ?? null;
             <div class="modal-body">
                 <form id="form-closing">
                     <div class="mb-3">
-                        <label class="form-label-custom">Nomor Rekening <span class="text-danger">*</span></label>
-                        <input type="text" class="input-custom" name="closing_account_number" placeholder="Nomor rekening realisasi" required>
-                        <div id="closing-account-hint" class="small mt-2" style="font-size:0.7rem;color:#64748B;">Ketik nomor rekening untuk mengambil data realisasi.</div>
+                        <label class="form-label-custom">Nomor Rekening / Nama Debitur <span class="text-danger">*</span></label>
+                        <input type="text" class="input-custom" name="closing_account_number" placeholder="Nomor rekening atau nama debitur" required>
+                        <div id="closing-account-hint" class="small mt-2" style="font-size:0.7rem;color:#64748B;">Ketik nomor rekening atau nama debitur untuk mengambil realisasi 3 bulan terakhir.</div>
                     </div>
                     <div id="closing-realization-preview" class="mb-3" style="display:none;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:12px;">
                         <div class="d-flex justify-content-between gap-2 mb-2">
@@ -664,22 +664,22 @@ $prospect_id = $_GET['id'] ?? null;
         if (account) {
             account.required = isCredit || isDana;
             account.closest('.mb-3').style.display = isAsset ? 'none' : 'block';
-            account.placeholder = isDana ? 'Nomor rekening tabungan/deposito' : 'Nomor rekening realisasi';
+            account.placeholder = isDana ? 'Nomor rekening tabungan/deposito' : 'Nomor rekening atau nama debitur';
             account.dataset.lookupEnabled = isCredit ? '1' : '0';
             if (accountHint) {
                 accountHint.style.display = isCredit ? 'block' : 'none';
-                accountHint.textContent = isCredit ? 'Ketik nomor rekening untuk mengambil data realisasi.' : '';
+                accountHint.textContent = isCredit ? 'Ketik nomor rekening atau nama debitur untuk mengambil realisasi 3 bulan terakhir.' : '';
                 accountHint.style.color = '#64748B';
             }
         }
         if (amount) {
-            amount.required = isCredit || isDana;
-            amount.closest('.mb-3').style.display = isAsset ? 'none' : 'block';
+            amount.required = isDana;
+            amount.closest('.mb-3').style.display = (isCredit || isAsset) ? 'none' : 'block';
             amount.min = isCredit || isDana ? '1' : '0';
             amount.placeholder = isDana ? 'Nominal setoran/deposito' : 'Nominal realisasi wajib';
             amount.readOnly = isCredit;
         }
-        if (tenorField) tenorField.style.display = isCredit || p.prospect_type === 'DEPOSITO' ? 'block' : 'none';
+        if (tenorField) tenorField.style.display = p.prospect_type === 'DEPOSITO' ? 'block' : 'none';
         if (tenor) tenor.readOnly = isCredit;
         if (!isCredit && realizationPreview) realizationPreview.style.display = 'none';
         document.getElementById('closing-asset-name-field').style.display = isAsset ? 'block' : 'none';
@@ -1005,17 +1005,17 @@ $prospect_id = $_GET['id'] ?? null;
         closingLookupAccount = data.no_rekening || '';
     }
 
-    async function lookupClosingAccount(accountNumber) {
-        const account = String(accountNumber || '').replace(/\s+/g, '');
-        if (!account) {
+    async function lookupClosingAccount(searchText) {
+        const query = String(searchText || '').trim();
+        if (!query) {
             clearClosingLookupFields();
-            setClosingLookupState('idle', 'Ketik nomor rekening untuk mengambil data realisasi.');
+            setClosingLookupState('idle', 'Ketik nomor rekening atau nama debitur untuk mengambil realisasi 3 bulan terakhir.');
             return;
         }
 
         setClosingLookupState('idle', 'Mencari data realisasi...');
         try {
-            const params = new URLSearchParams({ prospect_id: prospectId, no_rekening: account });
+            const params = new URLSearchParams({ prospect_id: prospectId, query });
             const res = await fetch(BASE_APP + '/api/?action=prospect_closing_lookup&' + params.toString(), {credentials:'include'});
             const body = await res.json();
             if (body.status === 200 && body.data) {
@@ -1023,17 +1023,17 @@ $prospect_id = $_GET['id'] ?? null;
                 setClosingLookupState('success', 'Data realisasi ditemukan dan nominal otomatis terisi.');
             } else {
                 clearClosingLookupFields();
-                setClosingLookupState('error', body.message || 'Nomor rekening tidak ditemukan.');
+                setClosingLookupState('error', body.message || 'Data realisasi tidak ditemukan.');
             }
         } catch (e) {
             clearClosingLookupFields();
-            setClosingLookupState('error', 'Gagal mengecek nomor rekening.');
+            setClosingLookupState('error', 'Gagal mengecek data realisasi.');
         }
     }
 
     document.querySelector('#form-closing [name="closing_account_number"]').addEventListener('input', function() {
         if (this.dataset.lookupEnabled !== '1') return;
-        this.value = this.value.replace(/\s+/g, '');
+        clearClosingLookupFields();
         clearTimeout(closingLookupTimer);
         closingLookupTimer = setTimeout(() => lookupClosingAccount(this.value), 450);
     });
@@ -1047,14 +1047,14 @@ $prospect_id = $_GET['id'] ?? null;
         e.preventDefault();
         const fd = new FormData(this);
         const isCredit = ['KREDIT', 'DEBITUR_EXISTING'].includes(prospectData?.prospect_type);
-        const account = String(fd.get('closing_account_number') || '').replace(/\s+/g, '');
-        if (isCredit && (!closingLookupAccount || closingLookupAccount !== account)) {
-            showToast('Nomor rekening wajib dicek dan valid dari data realisasi', 'danger');
+        const account = String(fd.get('closing_account_number') || '').trim();
+        if (isCredit && !closingLookupAccount) {
+            showToast('Realisasi wajib dicek dan cocok dengan nama prospek', 'danger');
             return;
         }
         const payload = {
             prospect_id: prospectId,
-            closing_account_number: account,
+            closing_account_number: isCredit ? closingLookupAccount : account,
             closing_realization_amount: parseInt(fd.get('closing_realization_amount') || '0'),
             closing_tenor: parseInt(fd.get('closing_tenor') || '0'),
             closing_asset_name: fd.get('closing_asset_name'),

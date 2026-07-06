@@ -58,24 +58,26 @@ $prospect_id = $_GET['id'] ?? null;
     .action-grid .action-btn i { font-size:0.82rem; margin:0 !important; }
     @media (min-width: 768px) { .action-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
 
+    .header-main { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-height:46px; }
+    .header-title-block { min-width:0; flex:1; }
     .sla-summary {
-        display:none; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px;
-        margin-top:10px; padding-top:8px; border-top:1px solid #F1F5F9;
+        display:none; grid-template-columns:1fr; gap:2px;
+        margin:0; padding:0; border:0; width:min(54%, 320px); flex-shrink:0;
     }
-    @media (min-width: 768px) { .sla-summary { grid-template-columns:repeat(5, minmax(0,1fr)); } }
     .sla-metric {
-        background:#F8FAFC; border:1px solid #E2E8F0; border-radius:9px;
-        padding:6px 8px; min-height:42px;
+        background:transparent; border:0; border-radius:0; padding:0; min-height:0;
+        display:flex; align-items:baseline; justify-content:flex-end; gap:6px; text-align:right;
     }
-    .sla-summary .sla-total { font-size:0.86rem; font-weight:900; color:#1E293B; line-height:1.15; }
-    .sla-summary .sla-label { font-size:0.56rem; color:#64748B; font-weight:800; text-transform:uppercase; line-height:1.1; }
-    .sla-metric-value { margin-top:3px; font-size:0.66rem; font-weight:900; color:#0A1931; line-height:1.15; word-break:break-word; }
+    .sla-summary .sla-total { font-size:0.64rem; font-weight:900; color:#1E293B; line-height:1.15; }
+    .sla-summary .sla-label { font-size:0.54rem; color:#94A3B8; font-weight:800; text-transform:uppercase; line-height:1.1; white-space:nowrap; }
+    .sla-metric-value { margin-top:0; font-size:0.62rem; font-weight:900; color:#0A1931; line-height:1.15; word-break:break-word; }
     .sla-metric-value.money { color:#00796B; }
     .sla-metric-value.percent { color:#1565C0; }
     @media (max-width: 420px) {
-        .sla-summary { grid-template-columns:repeat(3, minmax(0,1fr)); }
-        .sla-metric:nth-child(2) { grid-column:span 2; }
-        .sla-metric-value.money { font-size:0.6rem; }
+        .header-main { gap:8px; }
+        .sla-summary { width:52%; }
+        .sla-summary .sla-label { font-size:0.5rem; }
+        .sla-metric-value, .sla-summary .sla-total { font-size:0.56rem; }
     }
     .doc-item { display:flex; gap:8px; align-items:center; padding:8px 0; border-bottom:1px dashed #E2E8F0; }
     .doc-item:last-child { border-bottom:none; }
@@ -143,34 +145,38 @@ $prospect_id = $_GET['id'] ?? null;
                 <span class="badge-lg" id="d-type-badge">-</span>
                 <span class="badge-lg" id="d-status-badge">-</span>
             </div>
-            <h5 class="fw-bold text-dark mb-1" id="d-name">-</h5>
-            <p class="small text-muted mb-0" id="d-product"><i class="fa-solid fa-box-open me-1"></i>-</p>
+            <div class="header-main">
+                <div class="header-title-block">
+                    <h5 class="fw-bold text-dark mb-1" id="d-name">-</h5>
+                    <p class="small text-muted mb-0" id="d-product"><i class="fa-solid fa-box-open me-1"></i>-</p>
+                </div>
+                <div class="sla-summary" id="sla-summary">
+                    <div class="sla-metric">
+                        <span class="sla-label">SLA</span>
+                        <span class="sla-total" id="sla-days">0</span>
+                    </div>
+                    <div class="sla-metric">
+                        <span class="sla-label">Tahap</span>
+                        <span class="sla-metric-value" id="sla-current-stage">-</span>
+                    </div>
+                    <div class="sla-metric">
+                        <span class="sla-label">Pipeline</span>
+                        <span class="sla-metric-value money" id="sla-pipeline-amount">-</span>
+                    </div>
+                    <div class="sla-metric">
+                        <span class="sla-label">Real</span>
+                        <span class="sla-metric-value money" id="sla-realization-amount">-</span>
+                    </div>
+                    <div class="sla-metric">
+                        <span class="sla-label">Rasio</span>
+                        <span class="sla-metric-value percent" id="sla-realization-percent">-</span>
+                    </div>
+                </div>
+            </div>
             <div class="header-quick-actions" id="header-quick-actions">
                 <button type="button" class="header-icon-action" id="btn-header-photo" title="Lihat Foto Prospek"><i class="fa-solid fa-camera"></i></button>
                 <button type="button" class="header-icon-action" id="btn-header-map" title="Lihat Titik Lokasi"><i class="fa-solid fa-location-dot"></i></button>
                 <a class="header-icon-action" id="btn-header-wa" title="Hubungi via WhatsApp" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i></a>
-            </div>
-            <div class="sla-summary" id="sla-summary">
-                <div class="sla-metric">
-                    <div class="sla-label">Durasi SLA</div>
-                    <div class="sla-total" id="sla-days">0</div>
-                </div>
-                <div class="sla-metric">
-                    <div class="sla-label">Tahap</div>
-                    <div class="sla-metric-value" id="sla-current-stage">-</div>
-                </div>
-                <div class="sla-metric">
-                    <div class="sla-label">Pipeline</div>
-                    <div class="sla-metric-value money" id="sla-pipeline-amount">-</div>
-                </div>
-                <div class="sla-metric">
-                    <div class="sla-label">Realisasi</div>
-                    <div class="sla-metric-value money" id="sla-realization-amount">-</div>
-                </div>
-                <div class="sla-metric">
-                    <div class="sla-label">Rasio</div>
-                    <div class="sla-metric-value percent" id="sla-realization-percent">-</div>
-                </div>
             </div>
         </div>
 

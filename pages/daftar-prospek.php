@@ -3,13 +3,14 @@ $is_ao = in_array($user_role, ['ao_kredit', 'ao_dana', 'ao_remedial', 'developer
 $is_superuser = in_array($user_role, ['superuser', 'developer']);
 $is_pusat = ($user_kode_kantor === '000');
 $user_access_korwil = $_SESSION['user_data']['access_korwil'] ?? '';
+$is_pipeline_page = !empty($force_pipeline_kredit_page);
 
 // Default filter: closing_date akhir bulan kemarin, harian_date hari ini
 $default_closing_date = date('Y-m-t', strtotime('last month'));
 $default_harian = date('Y-m-d');
 
 // URL params (pre-fill filters)
-$url_filter = $_GET['filter'] ?? '';
+$url_filter = $is_pipeline_page ? 'sla' : ($_GET['filter'] ?? '');
 $url_type = $_GET['type'] ?? '';
 $url_source = $_GET['source'] ?? '';
 $url_view = $_GET['view'] ?? 'list'; // list | report
@@ -187,9 +188,10 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 <div class="header-compact">
     <div class="d-flex justify-content-between align-items-center">
         <div>
-            <h5 class="fw-bold mb-0">Daftar Prospek</h5>
+            <h5 class="fw-bold mb-0"><?= $is_pipeline_page ? 'Pipeline Kredit' : 'Daftar Prospek' ?></h5>
             <p class="small text-white-50 mb-0" style="font-size:0.7rem;">
-                <?php if ($is_superuser): ?>Seluruh prospek<?= $is_pusat ? '' : ' cabang Anda' ?>
+                <?php if ($is_pipeline_page): ?>Proses SLA kredit
+                <?php elseif ($is_superuser): ?>Seluruh prospek<?= $is_pusat ? '' : ' cabang Anda' ?>
                 <?php elseif ($is_ao): ?>Pipeline prospek Anda
                 <?php else: ?>Prospek yang Anda input<?php endif; ?>
             </p>
@@ -200,11 +202,15 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
 
 <!-- Stats -->
 <div class="stats-row" style="margin:-30px 16px 16px 16px; position:relative; z-index:10;">
-    <div class="stat-card"><span class="stat-num" id="s-open" style="font-size:1.2rem;font-weight:800;color:var(--color-warning);">0</span><span class="stat-lbl" style="font-size:0.6rem;color:#64748B;font-weight:600;">Open</span></div>
-    <div class="stat-card"><span class="stat-num" id="s-fu" style="font-size:1.2rem;font-weight:800;color:#1976D2;">0</span><span class="stat-lbl" style="font-size:0.6rem;color:#64748B;font-weight:600;">Follow Up</span></div>
-    <div class="stat-card"><span class="stat-num" id="s-sla" style="font-size:1.2rem;font-weight:800;color:#388E3C;">0</span><span class="stat-lbl" style="font-size:0.6rem;color:#64748B;font-weight:600;">SLA</span></div>
-    <div class="stat-card"><span class="stat-num" id="s-closing" style="font-size:1.2rem;font-weight:800;color:var(--color-accent);">0</span><span class="stat-lbl" style="font-size:0.6rem;color:#64748B;font-weight:600;">Closing</span></div>
-    <div class="stat-card"><span class="stat-num" id="s-reject" style="font-size:1.2rem;font-weight:800;color:#D32F2F;">0</span><span class="stat-lbl" style="font-size:0.6rem;color:#64748B;font-weight:600;">Reject</span></div>
+    <div class="stat-card"><span class="stat-num" id="s-open" style="font-size:1.2rem;font-weight:800;color:var(--color-warning);">0</span><span class="stat-lbl" id="s-open-label" style="font-size:0.6rem;color:#64748B;font-weight:600;"><?= $is_pipeline_page ? 'Pemberkasan' : 'Open' ?></span></div>
+    <div class="stat-card"><span class="stat-num" id="s-fu" style="font-size:1.2rem;font-weight:800;color:#1976D2;">0</span><span class="stat-lbl" id="s-fu-label" style="font-size:0.6rem;color:#64748B;font-weight:600;"><?= $is_pipeline_page ? 'Survey' : 'Follow Up' ?></span></div>
+    <div class="stat-card"><span class="stat-num" id="s-sla" style="font-size:1.2rem;font-weight:800;color:#388E3C;">0</span><span class="stat-lbl" id="s-sla-label" style="font-size:0.6rem;color:#64748B;font-weight:600;"><?= $is_pipeline_page ? 'Analisa' : 'SLA' ?></span></div>
+    <div class="stat-card"><span class="stat-num" id="s-closing" style="font-size:1.2rem;font-weight:800;color:var(--color-accent);">0</span><span class="stat-lbl" id="s-closing-label" style="font-size:0.6rem;color:#64748B;font-weight:600;"><?= $is_pipeline_page ? 'Komite' : 'Closing' ?></span></div>
+    <?php if (!$is_pipeline_page): ?>
+    <div class="stat-card"><span class="stat-num" id="s-reject" style="font-size:1.2rem;font-weight:800;color:#D32F2F;">0</span><span class="stat-lbl" id="s-reject-label" style="font-size:0.6rem;color:#64748B;font-weight:600;">Reject</span></div>
+    <?php else: ?>
+    <span id="s-reject" style="display:none;">0</span>
+    <?php endif; ?>
 </div>
 
 <div class="pipeline-summary" id="pipeline-summary">
@@ -595,6 +601,20 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
     }
 
     function updateStats(items) {
+        if (isPipelineCredit) {
+            const counts = {PEMBERKASAN:0, SURVEY:0, ANALISA:0, KOMITE:0};
+            items.forEach(p => {
+                if (p.status === 'CLOSING') return;
+                const stage = (p.credit_pipeline_stage || '').toUpperCase();
+                if (stage === 'FORMULIR' || stage === 'PEMBERKASAN') counts.PEMBERKASAN++;
+                else if (counts[stage] !== undefined) counts[stage]++;
+            });
+            document.getElementById('s-open').textContent = counts.PEMBERKASAN;
+            document.getElementById('s-fu').textContent = counts.SURVEY;
+            document.getElementById('s-sla').textContent = counts.ANALISA;
+            document.getElementById('s-closing').textContent = counts.KOMITE;
+            return;
+        }
         const counts = {OPEN:0, FOLLOW_UP:0, SLA:0, CLOSING:0, REJECT:0};
         items.forEach(p => { if (counts[p.status] !== undefined) counts[p.status]++; });
         document.getElementById('s-open').textContent = counts.OPEN;
@@ -615,11 +635,18 @@ $can_delegate_prospek = (bool)($menu_access['can_delegate_prospek'] ?? false);
             const res = await fetch(BASE_APP + '/api/?action=prospect_report&' + params.toString(), {credentials:'include'});
             const body = await res.json();
             const s = body.data?.summary || {};
-            document.getElementById('s-open').textContent = s.total_open || 0;
-            document.getElementById('s-fu').textContent = s.total_follow_up || 0;
-            document.getElementById('s-sla').textContent = s.total_sla || 0;
-            document.getElementById('s-closing').textContent = s.total_closing || 0;
-            document.getElementById('s-reject').textContent = s.total_reject || 0;
+            if (isPipelineCredit) {
+                document.getElementById('s-open').textContent = s.total_pipeline_pemberkasan || 0;
+                document.getElementById('s-fu').textContent = s.total_pipeline_survey || 0;
+                document.getElementById('s-sla').textContent = s.total_pipeline_analisa || 0;
+                document.getElementById('s-closing').textContent = s.total_pipeline_komite || 0;
+            } else {
+                document.getElementById('s-open').textContent = s.total_open || 0;
+                document.getElementById('s-fu').textContent = s.total_follow_up || 0;
+                document.getElementById('s-sla').textContent = s.total_sla || 0;
+                document.getElementById('s-closing').textContent = s.total_closing || 0;
+                document.getElementById('s-reject').textContent = s.total_reject || 0;
+            }
             document.getElementById('pipeline-summary').style.display = isPipelineCredit ? 'grid' : 'none';
             if (isPipelineCredit) {
                 document.getElementById('pipeline-pengajuan').textContent = formatRupiah(s.total_pipeline_pengajuan || 0);

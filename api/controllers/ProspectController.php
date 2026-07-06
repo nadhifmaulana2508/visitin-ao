@@ -2073,7 +2073,11 @@ class ProspectController
             SUM(CASE WHEN p.delegation_status = 'BELUM_DIDELEGASIKAN' THEN 1 ELSE 0 END) AS total_pending_delegasi,
             SUM(CASE WHEN p.status = 'CLOSING' THEN COALESCE(p.closing_realization_amount, 0) ELSE 0 END) AS total_realisasi,
             SUM(COALESCE(pc.requested_loan_amount, 0)) AS total_pipeline_pengajuan,
-            SUM(CASE WHEN p.status = 'CLOSING' THEN COALESCE(p.closing_realization_amount, 0) ELSE 0 END) AS total_pipeline_realisasi
+            SUM(CASE WHEN p.status = 'CLOSING' THEN COALESCE(p.closing_realization_amount, 0) ELSE 0 END) AS total_pipeline_realisasi,
+            SUM(CASE WHEN p.status NOT IN ('CLOSING','REJECT') AND COALESCE(pc.current_stage, '') IN ('FORMULIR', 'PEMBERKASAN') THEN 1 ELSE 0 END) AS total_pipeline_pemberkasan,
+            SUM(CASE WHEN p.status NOT IN ('CLOSING','REJECT') AND pc.current_stage = 'SURVEY' THEN 1 ELSE 0 END) AS total_pipeline_survey,
+            SUM(CASE WHEN p.status NOT IN ('CLOSING','REJECT') AND pc.current_stage = 'ANALISA' THEN 1 ELSE 0 END) AS total_pipeline_analisa,
+            SUM(CASE WHEN p.status NOT IN ('CLOSING','REJECT') AND pc.current_stage = 'KOMITE' THEN 1 ELSE 0 END) AS total_pipeline_komite
             FROM prospects p {$pipelineJoin} {$where}");
         $summaryStmt->execute($binds);
         $summary = $summaryStmt->fetch();

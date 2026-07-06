@@ -142,7 +142,7 @@ $can_access_history = (bool)($menu['can_access_history'] ?? true);
         <?php endif; ?>
 
         <?php if ($can_view_pipeline_kredit): ?>
-        <a href="<?= BASE_APP ?>/daftar-prospek?filter=sla" class="menu-card">
+        <a href="<?= BASE_APP ?>/pipeline-kredit" class="menu-card">
             <div class="menu-icon-wrapper icon-orange"><i class="fa-solid fa-chart-line"></i></div>
             <span class="menu-title">Pipeline Kredit</span>
         </a>

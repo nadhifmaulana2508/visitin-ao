@@ -28,7 +28,7 @@ $showProfile = (bool)($menu['can_access_profile'] ?? true);
     </a>
 
     <?php if ($showProspek): ?>
-    <a href="<?= BASE_APP ?>/daftar-prospek" class="nav-item <?= in_array($current_page, ['daftar-prospek', 'input-prospek', 'prospek-detail']) ? 'active' : '' ?>">
+    <a href="<?= BASE_APP ?>/daftar-prospek" class="nav-item <?= in_array($current_page, ['daftar-prospek', 'pipeline-kredit', 'input-prospek', 'prospek-detail']) ? 'active' : '' ?>">
         <i class="fa-solid fa-bullseye"></i>
         <span>Prospek</span>
     </a>

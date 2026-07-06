@@ -1422,11 +1422,12 @@ class ProspectController
         ];
     }
 
-    private function getCreditRealizationCandidates(string $query, string $prospectName): array
+    private function getCreditRealizationCandidates(string $query, string $prospectName, string $kodeKantor): array
     {
         $query = trim($query);
+        $kodeKantor = trim($kodeKantor);
         $accountNumber = $this->normalizeAccountNumber($query);
-        if ($query === '') {
+        if ($query === '' || $kodeKantor === '') {
             return [];
         }
 
@@ -1445,6 +1446,7 @@ class ProspectController
             FROM update_realisasi_kredit r
             LEFT JOIN produk_kredit pk ON CAST(pk.kode_produk AS CHAR) = CAST(r.kode_produk AS CHAR)
             WHERE r.tanggal_realisasi >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
+              AND r.kode_kantor = :kode_kantor
               AND (
                 r.no_rekening = :rekening_exact
                 OR r.no_rekening LIKE :rekening_like
@@ -1456,6 +1458,7 @@ class ProspectController
                 r.kretrans_id DESC
             LIMIT 20");
         $stmt->execute([
+            ':kode_kantor' => $kodeKantor,
             ':rekening_exact' => $accountNumber,
             ':rekening_exact_order' => $accountNumber,
             ':rekening_like' => '%' . $accountNumber . '%',
@@ -1477,7 +1480,11 @@ class ProspectController
 
     private function getMatchedCreditRealization(string $query, array $prospect): ?array
     {
-        $candidates = $this->getCreditRealizationCandidates($query, (string)($prospect['customer_name'] ?? ''));
+        $candidates = $this->getCreditRealizationCandidates(
+            $query,
+            (string)($prospect['customer_name'] ?? ''),
+            (string)($prospect['kode_kantor'] ?? '')
+        );
         foreach ($candidates as $candidate) {
             if ($this->isNameMatchedForClosing((string)($prospect['customer_name'] ?? ''), $candidate['nama_nasabah'])) {
                 return $candidate;
@@ -1531,9 +1538,13 @@ class ProspectController
             sendResponse(403, 'Anda tidak punya akses ke prospek ini', null);
         }
 
-        $candidates = $this->getCreditRealizationCandidates($query, (string)($prospect['customer_name'] ?? ''));
+        $candidates = $this->getCreditRealizationCandidates(
+            $query,
+            (string)($prospect['customer_name'] ?? ''),
+            (string)($prospect['kode_kantor'] ?? '')
+        );
         if (empty($candidates)) {
-            sendResponse(404, 'Data realisasi 3 bulan terakhir tidak ditemukan', null);
+            sendResponse(404, 'Data realisasi 3 bulan terakhir tidak ditemukan di cabang prospek ini', null);
         }
 
         $realization = null;
@@ -1593,9 +1604,13 @@ class ProspectController
             $accountNum = trim((string)($input['closing_account_number'] ?? ''));
             if ($accountNum === '') sendResponse(400, 'Closing kredit wajib input nomor rekening atau nama debitur', null);
 
-            $candidates = $this->getCreditRealizationCandidates($accountNum, (string)($prospect['customer_name'] ?? ''));
+            $candidates = $this->getCreditRealizationCandidates(
+                $accountNum,
+                (string)($prospect['customer_name'] ?? ''),
+                (string)($prospect['kode_kantor'] ?? '')
+            );
             if (empty($candidates)) {
-                sendResponse(404, 'Data realisasi 3 bulan terakhir tidak ditemukan', null);
+                sendResponse(404, 'Data realisasi 3 bulan terakhir tidak ditemukan di cabang prospek ini', null);
             }
 
             $realization = null;

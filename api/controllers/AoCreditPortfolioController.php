@@ -155,11 +155,13 @@ class AoCreditPortfolioController
             ':day_cutoff_1' => $dates['harian_date'],
             ':day_cutoff_2' => $dates['harian_date'],
             ':day_cutoff_3' => $dates['harian_date'],
-            ':day_cutoff_4' => $dates['harian_date'],
+            ':day_cutoff_4a' => $dates['harian_date'],
+            ':day_cutoff_4b' => $dates['harian_date'],
             ':trx_month_current_1' => $dates['harian_date'],
             ':trx_month_current_2' => $dates['harian_date'],
             ':trx_month_prev_1' => $dates['harian_date'],
-            ':trx_month_prev_2' => $dates['harian_date'],
+            ':trx_month_prev_2a' => $dates['harian_date'],
+            ':trx_month_prev_2b' => $dates['harian_date'],
             ':trx_from' => date('Y-m-01', strtotime($dates['harian_date'] . ' -1 month')),
             ':trx_to' => $dates['harian_date'],
             ':va_created' => $dates['harian_date'],
@@ -256,8 +258,8 @@ class AoCreditPortfolioController
                     WHEN COALESCE(trx.total_bayar_sekarang, 0) > 0 AND (COALESCE(n.tunggakan_pokok, 0) + COALESCE(n.tunggakan_bunga, 0)) > 0 THEN 'byr, ada tunggakan'
                     WHEN COALESCE(trx.total_bayar_sekarang, 0) > 0 AND DAY(trx.tgl_trx_skrg) <= DAY(c.tgl_jatuh_tempo) THEN 'byr dan tepat di jt'
                     WHEN COALESCE(trx.total_bayar_sekarang, 0) > 0 AND DAY(trx.tgl_trx_skrg) > DAY(c.tgl_jatuh_tempo) THEN 'byr lewat jt'
-                    WHEN COALESCE(trx.total_bayar_sekarang, 0) <= 0 AND DAY(:day_cutoff_4) <= DAY(c.tgl_jatuh_tempo) THEN 'blm byr belum jt'
-                    WHEN COALESCE(trx.total_bayar_sekarang, 0) <= 0 AND DAY(:day_cutoff_4) > DAY(c.tgl_jatuh_tempo) THEN 'blm byr lewat jt'
+                    WHEN COALESCE(trx.total_bayar_sekarang, 0) <= 0 AND DAY(:day_cutoff_4a) <= DAY(c.tgl_jatuh_tempo) THEN 'blm byr belum jt'
+                    WHEN COALESCE(trx.total_bayar_sekarang, 0) <= 0 AND DAY(:day_cutoff_4b) > DAY(c.tgl_jatuh_tempo) THEN 'blm byr lewat jt'
                     ELSE 'lainnya'
                 END AS status_bayar_jt,
                 CASE
@@ -299,9 +301,9 @@ class AoCreditPortfolioController
                         THEN (COALESCE(angsuran_pokok, 0) + COALESCE(angsuran_bunga, 0) - COALESCE(diskon_bunga, 0))
                         ELSE 0 END) AS total_bayar_sekarang,
                     MAX(CASE WHEN DATE_FORMAT(tgl_trans, '%Y-%m') = DATE_FORMAT(DATE_SUB(:trx_month_prev_1, INTERVAL 1 MONTH), '%Y-%m') THEN tgl_trans END) AS tgl_trx_lalu,
-                    SUM(CASE WHEN DATE_FORMAT(tgl_trans, '%Y-%m') = DATE_FORMAT(DATE_SUB(:trx_month_prev_2, INTERVAL 1 MONTH), '%Y-%m')
+                    SUM(CASE WHEN DATE_FORMAT(tgl_trans, '%Y-%m') = DATE_FORMAT(DATE_SUB(:trx_month_prev_2a, INTERVAL 1 MONTH), '%Y-%m')
                         THEN COALESCE(angsuran_pokok, 0) ELSE 0 END) AS pokok_lalu,
-                    SUM(CASE WHEN DATE_FORMAT(tgl_trans, '%Y-%m') = DATE_FORMAT(DATE_SUB(:trx_month_prev_2, INTERVAL 1 MONTH), '%Y-%m')
+                    SUM(CASE WHEN DATE_FORMAT(tgl_trans, '%Y-%m') = DATE_FORMAT(DATE_SUB(:trx_month_prev_2b, INTERVAL 1 MONTH), '%Y-%m')
                         THEN (COALESCE(angsuran_bunga, 0) - COALESCE(diskon_bunga, 0)) ELSE 0 END) AS bunga_lalu
                 FROM transaksi_kredit
                 WHERE tgl_trans >= :trx_from

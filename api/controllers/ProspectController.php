@@ -807,6 +807,22 @@ class ProspectController
 
         $prospect['created_by_name'] = $this->getEmployeeDisplayName($prospect['created_by'] ?? null);
         $prospect['assigned_to_name'] = $this->getEmployeeDisplayName($prospect['assigned_to'] ?? null);
+        if (!empty($prospect['closing_account_number']) && empty($prospect['closing_realization_date'])) {
+            $realizationStmt = $this->db->prepare("SELECT tanggal_realisasi
+                FROM update_realisasi_kredit
+                WHERE no_rekening = :rekening
+                  AND kode_kantor = :kode_kantor
+                ORDER BY tanggal_realisasi DESC, kretrans_id DESC
+                LIMIT 1");
+            $realizationStmt->execute([
+                ':rekening' => $prospect['closing_account_number'],
+                ':kode_kantor' => $prospect['kode_kantor'] ?? '',
+            ]);
+            $realizationDate = $realizationStmt->fetchColumn();
+            if ($realizationDate) {
+                $prospect['closing_realization_date'] = $realizationDate;
+            }
+        }
 
         // Get follow ups
         $fuStmt = $this->db->prepare("SELECT * FROM prospect_follow_ups WHERE prospect_id = :id ORDER BY follow_up_date DESC");
@@ -1580,6 +1596,7 @@ class ProspectController
     public function close(array $input): void
     {
         $user = $this->getCurrentUser();
+        $this->ensureColumnExists('prospects', 'closing_realization_date', 'DATE DEFAULT NULL AFTER `closing_realization_amount`');
         $prospectId = (int)($input['prospect_id'] ?? 0);
 
         if ($prospectId <= 0) sendResponse(400, 'prospect_id wajib diisi', null);
@@ -1637,6 +1654,7 @@ class ProspectController
 
             $input['closing_account_number'] = $realization['no_rekening'];
             $input['closing_realization_amount'] = $realization['realisasi_pokok'];
+            $input['closing_realization_date'] = $realization['tanggal_realisasi'] ?? null;
             $input['closing_tenor'] = $realization['jml_angsuran'];
             $amount = (int)($input['closing_realization_amount'] ?? 0);
             if ($amount <= 0) sendResponse(400, 'Closing kredit wajib input nominal realisasi pencairan', null);
@@ -1667,6 +1685,7 @@ class ProspectController
         $upd = $this->db->prepare("UPDATE prospects SET 
             status = 'CLOSING', closed_at = :closed, 
             closing_account_number = :acc, closing_realization_amount = :amount,
+            closing_realization_date = :realization_date,
             closing_tenor = :tenor, closing_note = :note,
             closing_asset_name = :asset, closing_buyer_name = :buyer,
             closing_asset_purchase_method = :asset_method,
@@ -1675,6 +1694,7 @@ class ProspectController
             ':closed' => $now,
             ':acc' => $input['closing_account_number'] ?? null,
             ':amount' => (int)($input['closing_realization_amount'] ?? 0) ?: null,
+            ':realization_date' => $input['closing_realization_date'] ?? null,
             ':tenor' => (int)($input['closing_tenor'] ?? 0) ?: null,
             ':note' => $input['closing_note'] ?? null,
             ':asset' => $input['closing_asset_name'] ?? null,

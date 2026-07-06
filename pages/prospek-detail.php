@@ -58,27 +58,29 @@ $prospect_id = $_GET['id'] ?? null;
     .action-grid .action-btn i { font-size:0.82rem; margin:0 !important; }
     @media (min-width: 768px) { .action-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
 
-    .header-status-stack { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
-    .header-sla-chip { display:none; font-size:0.62rem; font-weight:900; color:#1565C0; line-height:1; }
-    .header-sla-chip .muted { color:#94A3B8; font-size:0.54rem; text-transform:uppercase; margin-right:3px; }
     .header-main { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-height:46px; }
     .header-title-block { min-width:0; flex:1; }
+    .header-title-block #d-name {
+        max-width:100%; overflow:hidden; text-overflow:ellipsis; display:-webkit-box;
+        -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.18;
+    }
     .sla-summary {
-        display:none; grid-template-columns:1fr; gap:3px;
-        margin:0; padding:0; border:0; width:min(52%, 300px); flex-shrink:0;
+        display:none; grid-template-columns:repeat(2, minmax(0,1fr)); gap:4px 10px;
+        margin-top:8px; padding:0; border:0; max-width:360px;
     }
     .sla-metric {
         background:transparent; border:0; border-radius:0; padding:0; min-height:0;
-        display:flex; align-items:baseline; justify-content:flex-end; gap:6px; text-align:right;
+        display:flex; align-items:baseline; justify-content:flex-start; gap:6px; text-align:left;
     }
     .sla-summary .sla-label { font-size:0.56rem; color:#94A3B8; font-weight:800; text-transform:uppercase; line-height:1.1; white-space:nowrap; }
     .sla-metric-value { margin-top:0; font-size:0.74rem; font-weight:900; color:#0A1931; line-height:1.15; word-break:break-word; }
+    .sla-metric-value.sla-days { color:#1565C0; }
     .sla-metric-value.money { color:#00796B; }
     .sla-metric-value.percent { color:#1565C0; }
     .sla-realization-date { display:inline-block; margin-left:4px; color:#94A3B8; font-size:0.56rem; font-weight:800; white-space:nowrap; }
     @media (max-width: 420px) {
-        .header-main { gap:8px; }
-        .sla-summary { width:52%; }
+        .header-main { display:block; }
+        .sla-summary { max-width:100%; }
         .sla-summary .sla-label { font-size:0.5rem; }
         .sla-metric-value { font-size:0.68rem; }
         .sla-realization-date { font-size:0.5rem; margin-left:2px; }
@@ -147,28 +149,29 @@ $prospect_id = $_GET['id'] ?? null;
         <div class="detail-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <span class="badge-lg" id="d-type-badge">-</span>
-                <div class="header-status-stack">
-                    <span class="badge-lg" id="d-status-badge">-</span>
-                    <span class="header-sla-chip" id="header-sla-days"><span class="muted">SLA</span>0</span>
-                </div>
+                <span class="badge-lg" id="d-status-badge">-</span>
             </div>
             <div class="header-main">
                 <div class="header-title-block">
                     <h5 class="fw-bold text-dark mb-1" id="d-name">-</h5>
                     <p class="small text-muted mb-0" id="d-product"><i class="fa-solid fa-box-open me-1"></i>-</p>
-                </div>
-                <div class="sla-summary" id="sla-summary">
-                    <div class="sla-metric">
-                        <span class="sla-label">Pipeline</span>
-                        <span class="sla-metric-value money" id="sla-pipeline-amount">-</span>
-                    </div>
-                    <div class="sla-metric">
-                        <span class="sla-label">Real</span>
-                        <span class="sla-metric-value money"><span id="sla-realization-amount">-</span><span class="sla-realization-date" id="sla-realization-date"></span></span>
-                    </div>
-                    <div class="sla-metric">
-                        <span class="sla-label">Rasio</span>
-                        <span class="sla-metric-value percent" id="sla-realization-percent">-</span>
+                    <div class="sla-summary" id="sla-summary">
+                        <div class="sla-metric">
+                            <span class="sla-label">SLA</span>
+                            <span class="sla-metric-value sla-days" id="sla-days">0</span>
+                        </div>
+                        <div class="sla-metric">
+                            <span class="sla-label">Pipeline</span>
+                            <span class="sla-metric-value money" id="sla-pipeline-amount">-</span>
+                        </div>
+                        <div class="sla-metric">
+                            <span class="sla-label">Real</span>
+                            <span class="sla-metric-value money"><span id="sla-realization-amount">-</span><span class="sla-realization-date" id="sla-realization-date"></span></span>
+                        </div>
+                        <div class="sla-metric">
+                            <span class="sla-label">Rasio</span>
+                            <span class="sla-metric-value percent" id="sla-realization-percent">-</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -662,7 +665,6 @@ $prospect_id = $_GET['id'] ?? null;
             renderSlaStages(p.credit_pipeline?.stages || p.sla_logs || []);
         } else {
             document.getElementById('sla-summary').style.display = 'none';
-            document.getElementById('header-sla-days').style.display = 'none';
             document.getElementById('sla-section').style.display = 'none';
         }
 
@@ -687,8 +689,7 @@ $prospect_id = $_GET['id'] ?? null;
         const realizationDate = p.closing_realization_date || p.closed_at || '';
 
         summary.style.display = 'grid';
-        document.getElementById('header-sla-days').style.display = 'inline-block';
-        document.getElementById('header-sla-days').innerHTML = `<span class="muted">SLA</span>${p.sla_duration_days ?? 0}`;
+        document.getElementById('sla-days').textContent = p.sla_duration_days ?? 0;
         document.getElementById('sla-pipeline-amount').textContent = pipelineAmount > 0 ? fmtRupiah(pipelineAmount) : '-';
         document.getElementById('sla-realization-amount').textContent = realizationAmount > 0 ? fmtRupiah(realizationAmount) : '-';
         document.getElementById('sla-realization-date').textContent = realizationAmount > 0 && realizationDate ? fmtDate(realizationDate) : '';

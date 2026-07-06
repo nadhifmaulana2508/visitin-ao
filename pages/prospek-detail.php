@@ -59,11 +59,19 @@ $prospect_id = $_GET['id'] ?? null;
     @media (min-width: 768px) { .action-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
 
     .sla-summary {
-        background:#ffffff; border-radius:12px;
-        padding:14px; margin-bottom:14px; border:1px solid #E2E8F0;
+        display:none; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px;
+        margin-top:14px; padding-top:12px; border-top:1px solid #F1F5F9;
+    }
+    @media (min-width: 768px) { .sla-summary { grid-template-columns:repeat(5, minmax(0,1fr)); } }
+    .sla-metric {
+        background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px;
+        padding:10px 12px; min-height:64px;
     }
     .sla-summary .sla-total { font-size:1.8rem; font-weight:800; color:#1E293B; }
     .sla-summary .sla-label { font-size:0.7rem; color:#64748B; font-weight:600; }
+    .sla-metric-value { margin-top:5px; font-size:0.82rem; font-weight:900; color:#0A1931; line-height:1.25; word-break:break-word; }
+    .sla-metric-value.money { color:#00796B; }
+    .sla-metric-value.percent { color:#1565C0; }
     .doc-item { display:flex; gap:8px; align-items:center; padding:8px 0; border-bottom:1px dashed #E2E8F0; }
     .doc-item:last-child { border-bottom:none; }
     .doc-check { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:0.62rem; }
@@ -137,6 +145,28 @@ $prospect_id = $_GET['id'] ?? null;
                 <button type="button" class="header-icon-action" id="btn-header-map" title="Lihat Titik Lokasi"><i class="fa-solid fa-location-dot"></i></button>
                 <a class="header-icon-action" id="btn-header-wa" title="Hubungi via WhatsApp" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i></a>
             </div>
+            <div class="sla-summary" id="sla-summary">
+                <div class="sla-metric">
+                    <div class="sla-label">Durasi SLA</div>
+                    <div class="sla-total" id="sla-days">0</div>
+                </div>
+                <div class="sla-metric">
+                    <div class="sla-label">Tahap Saat Ini</div>
+                    <div class="sla-metric-value" id="sla-current-stage">-</div>
+                </div>
+                <div class="sla-metric">
+                    <div class="sla-label">Nominal Pipeline</div>
+                    <div class="sla-metric-value money" id="sla-pipeline-amount">-</div>
+                </div>
+                <div class="sla-metric">
+                    <div class="sla-label">Realisasi</div>
+                    <div class="sla-metric-value money" id="sla-realization-amount">-</div>
+                </div>
+                <div class="sla-metric">
+                    <div class="sla-label">Realisasi/Pipeline</div>
+                    <div class="sla-metric-value percent" id="sla-realization-percent">-</div>
+                </div>
+            </div>
         </div>
 
         <!-- Info Nasabah -->
@@ -155,16 +185,6 @@ $prospect_id = $_GET['id'] ?? null;
 
         <!-- SLA Summary (muncul sejak pipeline kredit dibuat) -->
         <div id="sla-section" style="display:none;">
-            <div class="sla-summary d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="sla-label">Durasi SLA (hari berjalan)</div>
-                    <div class="sla-total" id="sla-days">0</div>
-                </div>
-                <div class="text-end">
-                    <div class="sla-label">Tahap Saat Ini</div>
-                    <div style="font-size:0.85rem; font-weight:800; color:#1E293B;" id="sla-current-stage">-</div>
-                </div>
-            </div>
             <div class="detail-card">
                 <h6 class="section-title"><i class="fa-solid fa-chart-gantt me-2 text-accent"></i>Pipeline SLA Kredit</h6>
                 <div id="sla-stages"></div>
@@ -627,14 +647,14 @@ $prospect_id = $_GET['id'] ?? null;
 
         // Pipeline kredit tampil sejak debitur mau lanjut, supaya upload pemberkasan bisa dilakukan sebelum SLA mulai.
         if (p.credit_pipeline) {
+            renderHeaderCreditSummary(p);
             document.getElementById('sla-section').style.display = 'block';
-            document.getElementById('sla-days').textContent = p.sla_duration_days ?? 0;
             renderSlaStages(p.credit_pipeline?.stages || p.sla_logs || []);
             if (!(p.sla_started_at || p.credit_pipeline?.sla_started_at)) {
-                const plafon = p.credit_pipeline?.requested_loan_amount ? ' - Plafon ' + fmtRupiah(p.credit_pipeline.requested_loan_amount) : '';
-                document.getElementById('sla-current-stage').textContent = 'Menunggu pemberkasan' + plafon;
+                document.getElementById('sla-current-stage').textContent = 'Menunggu pemberkasan';
             }
         } else {
+            document.getElementById('sla-summary').style.display = 'none';
             document.getElementById('sla-section').style.display = 'none';
         }
 
@@ -647,6 +667,24 @@ $prospect_id = $_GET['id'] ?? null;
         // Actions
         configureClosingForm(p);
         renderActions(p);
+    }
+
+    function renderHeaderCreditSummary(p) {
+        const summary = document.getElementById('sla-summary');
+        const stageLabels = {PEMBERKASAN:'Pemberkasan',SURVEY:'Survey',ANALISA:'Analisa',KOMITE:'Komite',SELESAI:'Selesai',BATAL:'Batal'};
+        const currentStage = p.status === 'CLOSING' ? 'Closing' : (stageLabels[p.credit_pipeline?.current_stage] || p.credit_pipeline?.current_stage || '-');
+        const pipelineAmount = Number(p.credit_pipeline?.requested_loan_amount || 0);
+        const realizationAmount = Number(p.closing_realization_amount || 0);
+        const realizationPercent = pipelineAmount > 0 && realizationAmount > 0
+            ? Math.round((realizationAmount / pipelineAmount) * 100)
+            : null;
+
+        summary.style.display = 'grid';
+        document.getElementById('sla-days').textContent = p.sla_duration_days ?? 0;
+        document.getElementById('sla-current-stage').textContent = currentStage;
+        document.getElementById('sla-pipeline-amount').textContent = pipelineAmount > 0 ? fmtRupiah(pipelineAmount) : '-';
+        document.getElementById('sla-realization-amount').textContent = realizationAmount > 0 ? fmtRupiah(realizationAmount) : '-';
+        document.getElementById('sla-realization-percent').textContent = realizationPercent !== null ? `${realizationPercent}%` : '-';
     }
 
     function configureClosingForm(p) {
@@ -730,10 +768,12 @@ $prospect_id = $_GET['id'] ?? null;
 
     function renderSlaStages(logs) {
         const el = document.getElementById('sla-stages');
-        if (!logs || logs.length === 0) { el.innerHTML = '<p class="small text-muted">Belum ada tahap SLA</p>'; return; }
         const stageLabels = {PEMBERKASAN:'Pemberkasan',SURVEY:'Survey',ANALISA:'Analisa',KOMITE:'Komite'};
+        if (!logs || logs.length === 0) { el.innerHTML = '<p class="small text-muted">Belum ada tahap SLA</p>'; return; }
         const visibleStages = logs.filter(s => ['PEMBERKASAN','SURVEY','ANALISA','KOMITE'].includes(s.stage));
-        let currentStage = '-';
+        let currentStage = prospectData?.status === 'CLOSING'
+            ? 'Closing'
+            : (stageLabels[prospectData?.credit_pipeline?.current_stage] || prospectData?.credit_pipeline?.current_stage || '-');
         el.innerHTML = visibleStages.map(s => {
             const isDone = !!s.stage_ended_at;
             const isActive = !s.stage_ended_at;

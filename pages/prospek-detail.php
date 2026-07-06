@@ -154,12 +154,7 @@ $prospect_id = $_GET['id'] ?? null;
             <div class="header-main">
                 <div class="header-title-block">
                     <h5 class="fw-bold text-dark mb-1" id="d-name">-</h5>
-                    <p class="small text-muted mb-0" id="d-product"><i class="fa-solid fa-box-open me-1"></i>-</p>
                     <div class="sla-summary" id="sla-summary">
-                        <div class="sla-metric">
-                            <span class="sla-label">SLA</span>
-                            <span class="sla-metric-value sla-days" id="sla-days">0</span>
-                        </div>
                         <div class="sla-metric">
                             <span class="sla-label">Pipeline</span>
                             <span class="sla-metric-value money" id="sla-pipeline-amount">-</span>
@@ -167,6 +162,10 @@ $prospect_id = $_GET['id'] ?? null;
                         <div class="sla-metric">
                             <span class="sla-label">Real</span>
                             <span class="sla-metric-value money"><span id="sla-realization-amount">-</span><span class="sla-realization-date" id="sla-realization-date"></span></span>
+                        </div>
+                        <div class="sla-metric">
+                            <span class="sla-label">SLA</span>
+                            <span class="sla-metric-value sla-days" id="sla-days">0</span>
                         </div>
                         <div class="sla-metric">
                             <span class="sla-label">Rasio</span>
@@ -638,7 +637,6 @@ $prospect_id = $_GET['id'] ?? null;
         document.getElementById('d-status-badge').textContent = si.l;
 
         document.getElementById('d-name').textContent = p.customer_name;
-        document.getElementById('d-product').innerHTML = '<i class="fa-solid fa-box-open me-1"></i>' + getProductLabel(p);
         renderHeaderQuickActions(p);
 
         // Info

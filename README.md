@@ -1,84 +1,259 @@
 # Visitin AO
 
-**Sistem Kunjungan & Pengelolaan Nasabah untuk Account Officer (AO)**
+**Sistem E-Prospek, Kunjungan & Pengelolaan Nasabah untuk Account Officer**
 
-Aplikasi berbasis web mobile-first yang digunakan oleh Account Officer (AO) bank untuk mengelola kunjungan nasabah, mapping debitur, pencatatan aktivitas penagihan, dan monitoring pipeline kredit.
+Aplikasi web responsif (mobile + tablet + desktop) untuk mengelola prospek bisnis, kunjungan nasabah, mapping debitur, dan monitoring pipeline kredit.
 
 > **Live URL**: `visitin-ao.bkkjateng.co.id`  
-> **SSO Domain**: `apisso.bkkjateng.co.id`
+> **Branch kerja yang dituju**: `dev-responsif`
+> Branch sudah tersedia. Worktree saat ini masih berada di `prospek` karena ada perubahan lokal yang belum diamankan dan Git menolak perpindahan agar tidak menimpa perubahan.
+
+## Status Aktual (2026-09-07)
+
+Fondasi FE reusable sudah tersedia di [`assets/README.md`](assets/README.md). Fokus pekerjaan saat ini adalah merapikan tampilan responsif dan memigrasikan page ke component tersebut sebelum membangun API tambahan.
+
+| Area | Status aktual | Catatan |
+|---|---|---|
+| Component FE | Fondasi selesai | Toolbar, button, field, tabs, badge, state, pagination, API client, formatter, modal, filter, dan responsive data view tersedia. |
+| E-Prospek | Berjalan | Flow inbox `OPEN`/`FOLLOW_UP`, lifecycle, delegasi, dan pipeline sudah dipisahkan; refactor component serta QA masih berjalan. |
+| Pipeline Kredit | Berjalan | Entry point sudah mandiri; kontrak API dan QA tahap sampai closing perlu difinalkan. |
+| Kunjungan, Mapping, Nominatif | Belum terintegrasi penuh | Beberapa page masih berisi dummy/legacy flow dan perlu endpoint dari database existing. |
+| Autentikasi | Development fallback | SSO SIMPEG dan konfigurasi production belum final; dummy/local fallback masih ada. |
+| Database | Schema existing | Tidak direncanakan membuat tabel baru; runtime `CREATE TABLE` perlu ditinjau dan disesuaikan dengan DB yang sudah tersedia. |
+
+Daftar pekerjaan rinci dan histori perubahan dicatat di [`progres.md`](progres.md).
 
 ---
 
-## Daftar Isi
+## Status Pengembangan
 
-- [Arsitektur](#arsitektur)
-- [Tech Stack](#tech-stack)
-- [Struktur Direktori](#struktur-direktori)
-- [Fitur yang Sudah Dibangun](#fitur-yang-sudah-dibangun)
-- [Fitur dalam Pengembangan](#fitur-dalam-pengembangan)
-- [Instalasi & Setup](#instalasi--setup)
-- [Konfigurasi Environment](#konfigurasi-environment)
-- [API Endpoints](#api-endpoints)
-- [Routing](#routing)
-- [Autentikasi (SSO)](#autentikasi-sso)
-- [Role Pengguna](#role-pengguna)
-- [Halaman Aplikasi](#halaman-aplikasi)
-- [Konvensi Pengembangan](#konvensi-pengembangan)
-- [Roadmap](#roadmap)
+| Modul | Status | Keterangan |
+|-------|--------|------------|
+| E-Prospek (FE+BE) | Berjalan | CRUD, filter, report, lifecycle, dan pipeline existing perlu QA/refactor |
+| Auth | Development fallback | SSO SIMPEG belum final, dummy/local fallback masih tersedia |
+| Responsive UI | Fondasi selesai | Component global tersedia, migrasi seluruh page belum selesai |
+| Database | Existing DB | Tidak ada pembuatan tabel baru pada flow FE; kontrak DB perlu dikunci |
+| Kunjungan & Mapping | UI sebagian | Integrasi BE dan penggantian dummy belum selesai |
+| SSO SIMPEG | Pending | Menunggu konfigurasi serta pengujian environment production |
+
+---
+
+## Quick Start
+
+```bash
+# 1. Clone
+git clone https://github.com/nadhifmaulana2508/visitin-ao.git
+cd visitin-ao
+
+# 2. Setup environment
+# Buat .env di root project atau api/.env sesuai kredensial lokal
+# Edit api/.env sesuai kredensial DB lokal
+
+# 3. Buat database
+php database/run_migration_dpk.php
+
+# 4. Jalankan
+php -S localhost:8080
+# Akses: http://localhost:8080/kunjungan-ao
+```
+
+> Migration di atas hanya untuk environment yang memang membutuhkan setup lokal. Untuk server dengan database existing, gunakan proses deployment yang disetujui dan jangan menjalankan perubahan schema tanpa review.
 
 ---
 
 ## Arsitektur
 
-Aplikasi menggunakan arsitektur **MVC sederhana (PHP Native)** dengan pemisahan antara frontend (pages) dan backend (REST API):
-
 ```
-┌──────────────────────────────────────────────────┐
-│                    Browser                         │
-│              (Mobile-first PWA-like)              │
-└───────────────────────┬──────────────────────────┘
-                        │
-            ┌───────────┴───────────┐
-            │                       │
-     ┌──────▼──────┐       ┌───────▼───────┐
-     │  index.php  │       │  api/index.php │
-     │  (Router    │       │  (API Router)  │
-     │   Halaman)  │       │               │
-     └──────┬──────┘       └───────┬───────┘
-            │                       │
-   ┌────────┴────────┐    ┌────────┴────────┐
-   │  pages/*.php    │    │  controllers/   │
-   │  views/*.php    │    │  middlewares/   │
-   │                 │    │  helpers/       │
-   └─────────────────┘    │  config/        │
-                          └────────┬────────┘
-                                   │
-                          ┌────────▼────────┐
-                          │   MySQL (PDO)   │
-                          │  + API SIMPEG   │
-                          └─────────────────┘
+┌─────────────────────────────────────────────────┐
+│              Browser (All Devices)                │
+│        Mobile / Tablet / Desktop                 │
+└────────────────────┬────────────────────────────┘
+                     │
+         ┌───────────┴───────────┐
+         │                       │
+  ┌──────▼──────┐       ┌───────▼───────┐
+  │  index.php  │       │  api/index.php │
+  │  (Page      │       │  (API Router)  │
+  │   Router)   │       │               │
+  └──────┬──────┘       └───────┬───────┘
+         │                       │
+  ┌──────┴──────┐       ┌───────┴───────┐
+  │  pages/     │       │  routers/     │
+  │  views/     │       │  controllers/ │
+  └─────────────┘       └───────┬───────┘
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+             ┌──────▼──────┐       ┌───────▼───────┐
+             │   DB: dpk   │       │ DB: simpeg    │
+             │  (Prospek,  │       │ (Pegawai,     │
+             │  Kunjungan) │       │  Jabatan)     │
+             └─────────────┘       └───────────────┘
 ```
-
-**Prinsip Utama:**
-- **Front Controller Pattern** — Semua request masuk ke `index.php` (halaman) atau `api/index.php` (API).
-- **Clean URL** — Menggunakan `.htaccess` RewriteRule untuk URL tanpa ekstensi `.php`.
-- **SSO Cookie Bridge** — Token dari SIMPEG disimpan sebagai cookie `sso_token` dan di-bridge ke PHP session.
-- **Mobile-First UI** — Layout max-width 480px dengan bottom navigation ala native app.
 
 ---
 
-## Tech Stack
+## Database
 
-| Layer | Teknologi |
-|-------|-----------|
-| **Backend** | PHP 8.x (Native, tanpa framework) |
-| **Database** | MySQL via PDO |
-| **Frontend** | HTML5, CSS3 (Custom + Bootstrap 5.3.2) |
-| **JavaScript** | Vanilla JS + jQuery (select2) |
-| **Icons** | FontAwesome 6.4.2 |
-| **Maps** | Leaflet.js 1.9.4 + OpenStreetMap Nominatim |
-| **Auth** | JWT via SSO SIMPEG (cookie-based) |
-| **Server** | Apache (mod_rewrite) / Nginx |
+### 2 Database (1 server, port sama)
+
+| Database | Nama | Fungsi |
+|----------|------|--------|
+| **DPK** | `dpk` | Data prospek, kunjungan, mapping, kode_kantor |
+| **SIMPEG** | sesuai `.env` server | Data pegawai aktif existing (read-only) |
+
+### Tabel di DB `dpk`
+
+| Tabel | Fungsi |
+|-------|--------|
+| `kode_kantor` | Master cabang 000-028 + korwil |
+| `prospects` | Data prospek (kredit/tabungan/deposito/aset/existing) |
+| `prospect_follow_ups` | Catatan follow up per prospek |
+| `prospect_histories` | Audit trail perubahan status |
+| `prospect_sla_logs` | Tracking durasi tiap tahap SLA kredit |
+
+### Korwil Grouping
+
+| Korwil | Range | Cabang |
+|--------|-------|--------|
+| Pusat | 000 | Kantor Pusat |
+| Semarang | 001-007 | Utama, Rembang, Pati, Demak, Kendal, Salatiga, Kab.Semarang |
+| Solo | 008-014 | Wonogiri, Surakarta, Karanganyar, Sukoharjo, Sragen, Boyolali, Magelang |
+| Banyumas | 015-021 | Wonosobo, Purworejo, Kebumen, Banjarnegara, Purbalingga, Banyumas, Cilacap |
+| Pekalongan | 022-028 | Kab.Tegal, Brebes, Kota Tegal, Pemalang, Kota Pekalongan, Kab.Pekalongan, Batang |
+
+### Query Pegawai Aktif (dari SIMPEG)
+
+```sql
+SELECT k.kode_cabang AS kode_kantor, j.id_peg AS employee_id,
+       p.nama AS full_name, p.nip AS nik, p.email, p.telp,
+       k.nama_kantor AS branch_name, mj.nama_unit_kerja AS unit_kerja,
+       mj.nama_jabatan AS job_position, mj.level, mj.group_jabatan
+FROM tb_jabatan j
+INNER JOIN tb_pegawai p ON j.id_peg = p.id_peg
+INNER JOIN tb_master_jabatan mj ON CAST(j.kode_jabatan AS CHAR) = CAST(mj.kode_jabatan AS CHAR)
+LEFT JOIN tb_kantor k ON j.unit_kerja = k.kode_kantor_detail
+WHERE j.status_jab = 'Aktif';
+```
+
+---
+
+## Environment (.env)
+
+```env
+# Database DPK (prospek & kunjungan)
+DB_HOST=localhost
+DB_USER=root
+DB_PASS=
+DB_NAME=dpk
+DB_PORT=3306
+
+# Database SIMPEG (pegawai)
+SIMPEG_DB_HOST=localhost
+SIMPEG_DB_USER=root
+SIMPEG_DB_PASS=
+SIMPEG_DB_NAME=simpeg
+SIMPEG_DB_PORT=3306
+
+# Cookie
+COOKIE_NAME=sso_token
+COOKIE_DOMAIN=
+COOKIE_SECURE=false
+COOKIE_SAMESITE=Lax
+COOKIE_PATH=/
+```
+
+---
+
+## API Endpoints
+
+### Auth
+| Method | Action | Deskripsi |
+|--------|--------|-----------|
+| POST | `login` | Dummy login (7 akun) |
+| GET | `whoami` | Profil user dari token |
+| POST | `logout` | Clear cookie |
+
+### Prospek (CRUD)
+| Method | Action | Deskripsi |
+|--------|--------|-----------|
+| POST | `prospect_create` | Input prospek baru |
+| GET | `prospect_list` | List + filter + pagination |
+| GET | `prospect_detail` | Detail + follow_ups + histories + sla_logs |
+| POST | `prospect_delegate` | Delegasi ke AO (superuser) |
+| POST | `prospect_follow_up` | Input follow up |
+| POST | `prospect_change_status` | Ubah ke FOLLOW_UP / SLA |
+| POST | `prospect_close` | Closing (wajib rekening+nominal) |
+| POST | `prospect_reject` | Reject (wajib alasan) |
+
+### SLA Pipeline
+| Method | Action | Deskripsi |
+|--------|--------|-----------|
+| POST | `prospect_sla_log` | Tambah tahap SLA |
+| GET | `prospect_sla_pipeline` | List prospek status SLA |
+
+### Report & Master
+| Method | Action | Deskripsi |
+|--------|--------|-----------|
+| GET | `prospect_report` | Summary + closing period + harian + per type |
+| GET | `master_kode_kantor` | List cabang + korwil |
+| GET | `master_pegawai_ao` | List AO (untuk delegasi) |
+| POST | `upload_foto` | Upload foto base64 |
+
+### Filter Parameters (prospect_list)
+| Param | Contoh | Keterangan |
+|-------|--------|------------|
+| `source` | ao / non_ao / all | Filter sumber input |
+| `prospect_type` | KREDIT / TABUNGAN / ... | Jenis prospek |
+| `status` | OPEN / SLA / CLOSING / ... | Status prospek |
+| `korwil` | semarang / solo / ... | Filter korwil |
+| `kode_kantor` | 001 / 002 / ... | Filter cabang spesifik |
+| `date_from` | 2026-06-01 | Range tanggal input |
+| `date_to` | 2026-06-30 | Range tanggal input |
+| `closing_from` | 2026-05-01 | Range tanggal closing |
+| `closing_to` | 2026-05-31 | Range tanggal closing |
+| `search` | nama nasabah | Pencarian nama/HP |
+| `page` | 1 | Halaman |
+| `limit` | 25 | Per halaman |
+
+---
+
+## Akun Demo (Dummy Login)
+
+| ID Pegawai | Password | Role | Akses |
+|-----------|----------|------|-------|
+| `102-119` | 123456 | Developer | Full access semua fitur |
+| `201-001` | 123456 | AO Kredit | Pipeline kredit, prospek kredit |
+| `201-002` | 123456 | AO Dana | Pipeline tabungan/deposito |
+| `201-003` | 123456 | AO Remedial | Mapping, penagihan (FE+BE) |
+| `201-004` | 123456 | Superuser | Delegasi, monitoring, report |
+| `201-005` | 123456 | Staff (Teller) | Input prospek only |
+| `201-006` | 123456 | Staff (CS) | Input prospek only |
+
+---
+
+## Akses Berdasarkan Role
+
+| Role | Prospek | Report | Cabang |
+|------|---------|--------|--------|
+| Developer | Semua | Semua | Semua |
+| Pusat (Div. Pemasaran, Operasional, Direksi, Komisaris) | Lihat semua | Semua | Konsolidasi 000-028 |
+| Pusat (Div. Remedial) | Lihat semua | Hanya remedial | Konsolidasi |
+| Superuser Cabang (PE/PS) | Cabangnya saja | Cabangnya | Cabangnya saja |
+| AO Kredit | Yang di-assign + input sendiri | Pipeline-nya | Cabangnya |
+| AO Dana | Yang di-assign + input sendiri | Pipeline-nya | Cabangnya |
+| AO Remedial | Yang di-assign + input sendiri | Pipeline-nya | Cabangnya |
+| Staff (Non-AO) | Yang dia input saja | Tidak ada | Cabangnya |
+
+---
+
+## Responsive Breakpoints
+
+| Device | Width | Layout |
+|--------|-------|--------|
+| Mobile | < 768px | Full-width, 2 col grid, bottom nav sticky |
+| Tablet | 768-1023px | 768px centered, 3-4 col grid |
+| Desktop | 1024px+ | 1200px centered + shadow, 4-5 col grid |
 
 ---
 
@@ -86,332 +261,98 @@ Aplikasi menggunakan arsitektur **MVC sederhana (PHP Native)** dengan pemisahan 
 
 ```
 visitin-ao/
-├── index.php                  # Front controller utama (router halaman)
-├── .htaccess                  # Rewrite rules untuk clean URL
-├── .gitignore
-├── README.md                  # Dokumentasi ini
-├── issue.md                   # Issue & roadmap pengembangan fitur baru
-│
-├── api/                       # Backend REST API
-│   ├── index.php              # API router (switch-case ?action=xxx)
-│   ├── .env.example           # Template konfigurasi environment
+├── index.php                    # Page router (clean URL)
+├── .htaccess                    # Rewrite rules
+├── api/
+│   ├── .env.example             # Template config 2 database
+│   ├── index.php                # API front controller
 │   ├── config/
-│   │   ├── database.php       # Koneksi database (PDO)
-│   │   └── env.php            # Loader .env tanpa Composer
+│   │   ├── database.php         # Dual DB connection (dpk + simpeg)
+│   │   └── env.php              # .env loader
 │   ├── controllers/
-│   │   └── AuthController.php # Login, Whoami, Logout (proxy SIMPEG)
+│   │   ├── AuthController.php   # Dummy login (7 akun)
+│   │   └── ProspectController.php # Full CRUD + filter + report
+│   ├── routers/
+│   │   └── prospect.php         # Prospect action routing
 │   ├── middlewares/
-│   │   └── AuthMiddleware.php # Ekstrak token dari header/cookie
+│   │   └── AuthMiddleware.php   # Token extractor
 │   └── helpers/
-│       ├── response.php       # sendResponse(), readJsonBody()
-│       ├── http.php           # httpRequest() cURL wrapper
-│       └── cookie.php         # setAuthCookie(), clearAuthCookie()
-│
-├── pages/                     # Halaman-halaman frontend
-│   ├── login.php              # Halaman login (SSO fetch)
-│   ├── reset.php              # Aktivasi / Reset password
-│   ├── home.php               # Dashboard utama (role-based menu)
-│   ├── mapping.php            # Mapping debitur awal bulan
-│   ├── nominatif.php          # Data nominatif kredit
-│   ├── history.php            # Riwayat aktivitas kunjungan
-│   ├── profile.php            # Profil & pengaturan akun
-│   ├── janji-bayar.php        # Daftar janji bayar (PTP)
-│   ├── hapus-buku.php         # Data debitur hapus buku (PH)
-│   ├── kunjungan-create.php   # Form input kunjungan (kosong/WIP)
-│   ├── kunjungan-create-kal.php # Form kunjungan + kalkulator simulasi
-│   ├── kunjungan-detail.php   # Detail bukti kunjungan
-│   ├── kunjungan-history-debitur.php # Timeline riwayat per debitur
-│   └── kalkulator-simulasi.php # Widget simulasi penurunan DPD
-│
-├── views/                     # Komponen UI reusable
-│   ├── header.php             # DOCTYPE, CSS global, mobile wrapper
-│   ├── navbar.php             # Bottom navigation bar
-│   └── script.php             # Penutup wrapper + Bootstrap JS
-│
-└── docs/                      # Dokumentasi teknis
-    └── issues/
-        └── 001-auth-login.md  # Dokumentasi implementasi auth
+│       ├── response.php         # JSON response helper
+│       ├── http.php             # cURL wrapper
+│       └── cookie.php           # Cookie management
+├── database/
+│   ├── migration_dpk.sql        # CREATE TABLE + kode_kantor data
+│   ├── dummy_data_dpk.sql       # Sample prospek + histories
+│   └── query_simpeg_pegawai_aktif.sql  # Reference query SIMPEG
+├── pages/
+│   ├── login.php                # Login + demo accounts
+│   ├── home.php                 # Dashboard role-based
+│   ├── input-prospek.php        # Form + foto + geotagging + cabang
+│   ├── daftar-prospek.php       # List + filter + report view
+│   ├── prospek-detail.php       # Detail + SLA pipeline + actions
+│   ├── mapping.php              # Mapping debitur (UI)
+│   ├── nominatif.php            # Data nominatif (UI)
+│   ├── history.php              # Riwayat kunjungan (UI)
+│   ├── profile.php              # Profil pegawai (UI)
+│   └── ...
+├── views/
+│   ├── header.php               # Responsive CSS + layout
+│   ├── navbar.php               # Bottom nav role-based
+│   └── script.php               # Global JS utilities
+└── uploads/                     # Foto prospek (gitignored)
 ```
 
 ---
 
-## Fitur yang Sudah Dibangun
-
-### 1. Autentikasi SSO (Selesai)
-- Login via proxy ke API SIMPEG (`/auth/login`)
-- Validasi token via `/auth/whoami`
-- Cookie SSO (`sso_token`) untuk single sign-on lintas aplikasi internal
-- Session bridge (cookie -> PHP session)
-- Logout (clear cookie)
-
-### 2. Frontend Pages (UI Selesai, Belum Terintegrasi API)
-- **Home** — Dashboard role-based (remedial, kredit, dana)
-- **Mapping** — Daftar debitur mapping awal bulan + ringkasan performa
-- **Nominatif** — Data nominatif kredit dengan filter multi-level
-- **History** — Riwayat kunjungan + raport kinerja AO
-- **Profile** — ID Card pegawai, ganti password, sinkronisasi SIMPEG
-- **Janji Bayar** — Follow-up nasabah PTP (belum/sudah bayar)
-- **Hapus Buku** — Data debitur PH (Penghapusan Buku)
-- **Kunjungan Create** — Form input kunjungan (GPS, kamera, smart form)
-- **Kunjungan Detail** — Bukti kunjungan dengan watermark foto
-- **Kalkulator Simulasi** — Simulasi penurunan DPD (Days Past Due)
-- **Login & Reset** — Form login + form aktivasi/reset password
-
-### 3. API Endpoints (Partial)
-- `POST /api/?action=login` — Autentikasi via SIMPEG
-- `GET /api/?action=whoami` — Validasi token + ambil profil
-- `POST /api/?action=logout` — Hapus cookie
-- `GET /api/?action=get_mapping` — Dummy response (placeholder)
-- `POST /api/?action=create_kunjungan` — Dummy response (placeholder)
-
----
-
-## Fitur dalam Pengembangan
-
-Lihat file [`issue.md`](./issue.md) untuk detail lengkap:
-
-1. **Modul Prospek** — Input, delegasi, dan follow-up prospek bisnis (kredit, tabungan, deposito, pembeli aset, debitur existing)
-2. **Delegasi AO** — Superuser mendelegasikan prospek ke AO yang tepat berdasarkan jenis prospek
-3. **SLA Kredit** — Pencatatan pipeline kredit dengan tracking waktu proses
-4. **Mapping Debitur** — Pembagian debitur ke AO berdasarkan hari menunggak setiap awal bulan
-5. **Monitoring & Laporan** — Dashboard superuser untuk monitoring progres
-
----
-
-## Instalasi & Setup
-
-### Prasyarat
-- PHP 8.0+ dengan ekstensi: `pdo_mysql`, `curl`, `json`, `mbstring`
-- MySQL 5.7+ / MariaDB 10.3+
-- Apache (mod_rewrite) atau Nginx
-- Akses ke API SIMPEG (untuk autentikasi)
-
-### Langkah Instalasi
-
-```bash
-# 1. Clone repository
-git clone https://github.com/nadhifmaulana2508/visitin-ao.git
-
-# 2. Masuk ke direktori project
-cd visitin-ao
-
-# 3. Salin konfigurasi environment
-cp api/.env.example api/.env
-
-# 4. Edit file .env sesuai konfigurasi lokal
-nano api/.env
-
-# 5. Buat database MySQL
-mysql -u root -p -e "CREATE DATABASE db_kunjungan;"
-
-# 6. (Opsional) Jalankan dengan PHP built-in server untuk development
-php -S localhost:8080
-
-# 7. Atau letakkan di folder htdocs/www Apache
-# Pastikan folder project bernama 'kunjungan-ao' di localhost
-# Akses: http://localhost/kunjungan-ao
-```
-
-### Setup Apache Virtual Host (Production)
-
-```apache
-<VirtualHost *:80>
-    ServerName visitin-ao.bkkjateng.co.id
-    DocumentRoot /var/www/visitin-ao
-    
-    <Directory /var/www/visitin-ao>
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-```
-
----
-
-## Konfigurasi Environment
-
-File: `api/.env` (dibuat dari `api/.env.example`)
-
-```env
-# API SSO SIMPEG
-SIMPEG_BASE_URL=https://apisso.bkkjateng.co.id
-APP_NAME=visitin-ao
-
-# Cookie SSO (lintas aplikasi internal)
-COOKIE_NAME=sso_token
-COOKIE_DOMAIN=.bkkjateng.co.id    # Kosongkan untuk localhost
-COOKIE_SECURE=true                  # false untuk localhost
-COOKIE_SAMESITE=Lax
-COOKIE_PATH=/
-```
-
-**Catatan untuk development lokal:**
-- Set `COOKIE_DOMAIN=` (kosong)
-- Set `COOKIE_SECURE=false`
-
----
-
-## API Endpoints
-
-Base URL: `/api/?action={action_name}`
-
-| Method | Action | Auth | Deskripsi |
-|--------|--------|------|-----------|
-| POST | `login` | Public | Login via SIMPEG SSO |
-| GET | `whoami` | Bearer/Cookie | Ambil profil user |
-| POST | `logout` | - | Clear cookie SSO |
-| GET | `get_mapping` | Bearer/Cookie | Daftar mapping debitur |
-| POST | `create_kunjungan` | Bearer/Cookie | Simpan data kunjungan |
-
-### Format Response Standar
-
-```json
-{
-  "status": 200,
-  "message": "Pesan deskriptif",
-  "data": { ... }
-}
-```
-
----
-
-## Routing
-
-### Halaman (Frontend)
-Router di `index.php` menggunakan clean URL:
+## Alur E-Prospek
 
 ```
-https://visitin-ao.bkkjateng.co.id/{page}
-https://visitin-ao.bkkjateng.co.id/{page}/{param}
+Input Prospek ──→ [AO?] ──Yes──→ Auto-delegasi ──→ Pipeline AO
+      │                                                    │
+      └──No──→ Menunggu Delegasi ──→ Superuser Delegasi ───┘
+                                                           │
+                                              ┌────────────┘
+                                              ▼
+                                    Follow Up (1..n kali)
+                                              │
+                              ┌────────────────┼────────────────┐
+                              ▼                ▼                ▼
+                         [Kredit?]         [Non-Kredit]      Reject
+                              │                │
+                              ▼                ▼
+                            SLA            Closing
+                         (Pipeline)           │
+                              │               Done
+                    ┌─────────┼─────────┐
+                    ▼         ▼         ▼
+               Verifikasi  Analisa   Komite
+                    │         │         │
+                    ▼         ▼         ▼
+                Pencairan ──→ Closing (wajib rekening+nominal)
 ```
 
-Contoh:
-- `/home` → `pages/home.php`
-- `/mapping` → `pages/mapping.php`
-- `/kunjungan-detail/123` → `pages/kunjungan-detail.php` (param=123)
-
-### API (Backend)
-Router di `api/index.php` menggunakan query parameter:
-
-```
-/api/?action=login         → AuthController::login()
-/api/?action=whoami        → AuthController::whoami()
-/api/?action=get_mapping   → (placeholder)
-```
-
-### Halaman Publik (Tanpa Login)
-- `/login`
-- `/reset`
-
-Semua halaman lain memerlukan cookie `sso_token` valid.
+### SLA Pipeline (Kredit)
+Saat prospek kredit masuk status SLA, otomatis menjadi pipeline AO Kredit dengan tracking:
+- **Tahap**: Verifikasi → Survei → Analisa → Komite → Persetujuan → Akad → Pencairan
+- **Durasi per tahap**: dihitung otomatis (hari)
+- **Total durasi SLA**: dari masuk SLA sampai Closing/Reject
 
 ---
 
-## Autentikasi (SSO)
+## Tech Stack
 
-Aplikasi menggunakan **Single Sign-On** via API SIMPEG:
-
-1. User submit `id_peg` + `password` di form login
-2. Frontend fetch ke `/api/?action=login`
-3. Backend proxy ke SIMPEG `/auth/login`
-4. Jika valid, SIMPEG return JWT token
-5. Backend set cookie `sso_token` (HttpOnly, domain `.bkkjateng.co.id`)
-6. Cookie dipakai bersama oleh aplikasi internal lain (monbis, report-dpk, dll)
-
-**Prioritas sumber token:**
-1. Header `Authorization: Bearer <token>` (utama)
-2. Cookie `sso_token` (fallback)
-
----
-
-## Role Pengguna
-
-Aplikasi mendukung multiple role dengan menu berbeda:
-
-| Role | Fungsi | Menu Utama |
-|------|--------|------------|
-| **AO Remedial** | Penagihan debitur bermasalah | Mapping, Nominatif, Janji Bayar, Hapus Buku |
-| **AO Kredit** | Prospek & pengelolaan kredit aktif | Prospek, Mapping Existing, Potensi Top-Up |
-| **AO Dana** | Pengelolaan tabungan & deposito | Kelola Dana, Jadwal Menabung |
-| **Superuser** | Delegasi prospek & mapping debitur | Semua menu + Delegasi + Mapping |
-| **Developer** | Akses penuh untuk testing | Seluruh fitur |
-
----
-
-## Halaman Aplikasi
-
-| Halaman | File | Deskripsi |
-|---------|------|-----------|
-| Login | `pages/login.php` | Form login SSO dengan validasi async |
-| Reset | `pages/reset.php` | Aktivasi akun / reset password |
-| Home | `pages/home.php` | Dashboard dengan menu role-based |
-| Mapping | `pages/mapping.php` | Daftar debitur + coverage + ringkasan |
-| Nominatif | `pages/nominatif.php` | Data kredit seluruh cabang |
-| History | `pages/history.php` | Riwayat kunjungan + raport kinerja |
-| Profile | `pages/profile.php` | Info pegawai + pengaturan |
-| Janji Bayar | `pages/janji-bayar.php` | Follow-up PTP |
-| Hapus Buku | `pages/hapus-buku.php` | Data debitur PH |
-| Kunjungan Create | `pages/kunjungan-create-kal.php` | Form kunjungan lengkap |
-| Kunjungan Detail | `pages/kunjungan-detail.php` | Detail bukti kunjungan |
-| History Debitur | `pages/kunjungan-history-debitur.php` | Timeline per nasabah |
-
----
-
-## Konvensi Pengembangan
-
-### Penamaan File
-- Halaman: `pages/{nama-fitur}.php` (kebab-case)
-- Controller: `api/controllers/{NamaController}.php` (PascalCase)
-- Helper: `api/helpers/{nama}.php` (lowercase)
-
-### CSS
-- Menggunakan CSS Variables global di `views/header.php`
-- Setiap halaman memiliki `<style>` scoped di awal file
-- Warna utama: `--color-primary` (#0A1931), `--color-accent` (#FF7B54)
-
-### JavaScript
-- Vanilla JS untuk interaksi halaman
-- jQuery hanya untuk Select2 (dependent dropdown)
-- Fetch API untuk komunikasi dengan backend
-
-### Base URL Dinamis
-```php
-define('BASE_APP',
-    (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' .
-    $_SERVER['HTTP_HOST'] .
-    (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ? '/kunjungan-ao' : '')
-);
-```
-
----
-
-## Roadmap
-
-- [x] Arsitektur dasar (routing, front controller, API router)
-- [x] Autentikasi SSO via SIMPEG
-- [x] UI halaman utama (Home, Mapping, History, Profile)
-- [x] UI form kunjungan (GPS, kamera, smart form)
-- [x] UI nominatif, janji bayar, hapus buku
-- [ ] Integrasi API `get_mapping` dengan database
-- [ ] Integrasi API `create_kunjungan` (upload foto base64)
-- [ ] Modul Prospek (kredit, tabungan, deposito, pembeli aset, debitur existing)
-- [ ] Delegasi AO oleh Superuser
-- [ ] SLA Kredit (pipeline + tracking waktu)
-- [ ] Mapping Debitur awal bulan (validasi kategori)
-- [ ] Pipeline debitur per AO
-- [ ] Monitoring & Laporan
-- [ ] Push notification / reminder janji bayar
-- [ ] Responsif cross-device
+| Layer | Teknologi |
+|-------|-----------|
+| Backend | PHP 8.x Native (tanpa framework) |
+| Database | MySQL via PDO (dual connection) |
+| Frontend | Bootstrap 5.3.2 + Custom CSS |
+| Maps | Leaflet.js 1.9.4 + OSM |
+| Icons | FontAwesome 6.4.2 |
+| Camera | WebRTC (getUserMedia) |
+| Wilayah | emsifa API (provinsi→kab→kec→desa) |
 
 ---
 
 ## Lisensi
 
-Internal - BKK Jateng. Tidak untuk distribusi publik.
-
----
-
-## Kontak
-
-- **Repository**: [github.com/nadhifmaulana2508/visitin-ao](https://github.com/nadhifmaulana2508/visitin-ao)
-- **IT Department** - BKK Jawa Tengah
+Internal - BKK Jawa Tengah. Tidak untuk distribusi publik.

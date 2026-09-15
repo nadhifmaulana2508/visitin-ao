@@ -56,4 +56,11 @@ if (!function_exists('env_load')) {
     }
 }
 
-env_load(__DIR__ . '/../.env');
+$envPaths = [
+    dirname(__DIR__, 2) . '/.env',
+    __DIR__ . '/../.env',
+];
+
+foreach ($envPaths as $envPath) {
+    env_load($envPath);
+}
